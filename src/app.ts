@@ -24,7 +24,8 @@ app.use(helmet());
 // ✅ CORS
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: ["http://localhost:3000", 
+      "https://skillpulse-rho.vercel.app/"],
     credentials: true,
   })
 );
