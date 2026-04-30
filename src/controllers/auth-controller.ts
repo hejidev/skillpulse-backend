@@ -94,7 +94,7 @@ export const register = async (req: Request, res: Response) => {
 
     // 📧 SEND EMAIL
     if (!isAdmin) {
-        const verifyLink = `http://localhost:3000/auth/verify-email?token=${token}`;
+        const verifyLink = `${process.env.FRONTEND_URL}/auth/verify-email?token=${token}`;
 
         await sendEmail(
             email,

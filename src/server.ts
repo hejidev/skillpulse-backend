@@ -16,7 +16,7 @@ const server = http.createServer(app);
 // ✅ SOCKET.IO SETUP
 export const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: "https://skillpulse-rho.vercel.app",
   },
 });
 

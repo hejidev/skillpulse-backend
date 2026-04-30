@@ -25,7 +25,7 @@ app.use(helmet());
 app.use(
   cors({
     origin: ["http://localhost:3000", 
-      "https://skillpulse-rho.vercel.app/"],
+      "https://skillpulse-rho.vercel.app"],
     credentials: true,
   })
 );
@@ -51,7 +51,7 @@ app.use(
 // 🚫 STRICT LOGIN LIMIT (ANTI-BRUTE FORCE)
 export const authLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
-  max: 5,
+  max: 50,
   message: "Too many login attempts. Try again later.",
 });
 
