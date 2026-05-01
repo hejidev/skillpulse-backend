@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface IUser extends Document {
+  _id: mongoose.Types.ObjectId;
   name: string;
   email: string;
   password: string;
@@ -99,10 +100,26 @@ const userSchema = new Schema<IUser>({
 
   notifications: [
     {
+      _id: Object,
       message: String,
-      read: { type: Boolean, default: false },
-      createdAt: { type: Date, default: Date.now },
-    }
+      type: {
+        type: String,
+        enum: ["info", "success", "warning", "error"],
+        default: "info",
+      },
+      read: {
+        type: Boolean,
+        default: false,
+      },
+      archived: {
+        type: Boolean,
+        default: false,
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      },
+    },
   ],
 
   emailNotifications: { type: Boolean, default: true },

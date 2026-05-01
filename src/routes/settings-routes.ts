@@ -12,6 +12,11 @@ import {
   getNotifications,
   markNotificationsRead,
   updateNotifications,
+  deleteNotification,
+  clearNotifications,
+  markOneRead,
+  archiveNotification,
+  clearArchived,
 } from "../controllers/settings-controller";
 import { upload } from "../middleware/upload";
 import { logoutDevice } from "../controllers/auth-controller";
@@ -22,7 +27,12 @@ router.get("/me", isAuth, getProfile);
 router.put("/profile", isAuth,  upload.single("avatar"), updateProfile);
 router.get("/notifications", isAuth, getNotifications);
 router.put("/notifications", isAuth, updateNotifications);
+router.put("/notifications/:id/read", isAuth, markOneRead);
+router.put("/notifications/:id/archive", isAuth, archiveNotification);
+router.delete("/notifications/archived", isAuth, clearArchived);
 router.put("/notifications/read", isAuth, markNotificationsRead);
+router.delete("/notifications/:id", isAuth, deleteNotification);
+router.delete("/notifications", isAuth, clearNotifications);
 router.get("/reminder", isAuth, getReminder);
 router.get("/export", isAuth, exportUserData);
 router.put("/theme", isAuth, updateTheme);

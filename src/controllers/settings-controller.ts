@@ -66,6 +66,68 @@ export const markNotificationsRead = async (req: AuthRequest, res: Response) => 
   res.json({ message: "Marked as read" });
 };
 
+// MARK ONE AS READ
+export const markOneRead = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+
+  await User.updateOne(
+    { _id: req.userId, "notifications._id": id },
+    { $set: { "notifications.$.read": true } }
+  );
+
+  res.json({ message: "Marked as read" });
+};
+
+// ARCHIVE ONE NOTIFICATION
+export const archiveNotification = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+
+  await User.updateOne(
+    { _id: req.userId, "notifications._id": id },
+    { $set: { "notifications.$.archived": true } }
+  );
+
+  res.json({ message: "Archived" });
+};
+
+// CLEAR ARCHIVED NOTIFICATIONS
+export const clearArchived = async (req: AuthRequest, res: Response) => {
+  await User.updateOne(
+    { _id: req.userId },
+    { $pull: { notifications: { archived: true } } }
+  );
+
+  res.json({ message: "Archived cleared" });
+};
+
+// DELETE ONE NOTIFICATION
+export const deleteNotification = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+
+  await User.updateOne(
+    { _id: req.userId },
+    {
+      $pull: {
+        notifications: { _id: id },
+      },
+    }
+  );
+
+  res.json({ message: "Notification deleted" });
+};
+
+// CLEAR ALL NOTIFICATIONS
+export const clearNotifications = async (req: AuthRequest, res: Response) => {
+  await User.updateOne(
+    { _id: req.userId },
+    {
+      $set: { notifications: [] },
+    }
+  );
+
+  res.json({ message: "All notifications cleared" });
+};
+
 // ================= REMINDER =================
 export const getReminder = async (req: AuthRequest, res: Response) => {
   const user = await User.findById(req.userId).select("reminder");
