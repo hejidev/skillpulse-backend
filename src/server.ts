@@ -10,26 +10,45 @@ import { Server } from "socket.io";
 
 const PORT = process.env.PORT || 5000;
 
-// ✅ CREATE HTTP SERVER
+// HTTP server
 const server = http.createServer(app);
 
-// ✅ SOCKET.IO SETUP
+// SOCKET.IO
 export const io = new Server(server, {
   cors: {
     origin: "https://skillpulse-rho.vercel.app",
+    methods: ["GET", "POST"],
   },
 });
 
+// ✅ GLOBAL USER SOCKET MAP (IMPORTANT)
+export const userSockets = new Map<string, string>();
+
 io.on("connection", (socket) => {
   console.log("⚡ User connected:", socket.id);
+
+  // register user
+  socket.on("register", (userId: string) => {
+    userSockets.set(userId, socket.id);
+    console.log("📌 User registered:", userId);
+  });
+
+  socket.on("disconnect", () => {
+    for (const [userId, id] of userSockets.entries()) {
+      if (id === socket.id) {
+        userSockets.delete(userId);
+        break;
+      }
+    }
+    console.log("❌ User disconnected:", socket.id);
+  });
 });
 
-// ❗ IMPORTANT: use server.listen NOT app.listen
 const startServer = async () => {
   await connectDB();
 
   server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
   });
 };
 

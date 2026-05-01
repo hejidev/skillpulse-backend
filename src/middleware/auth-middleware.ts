@@ -5,6 +5,7 @@ import User from "../models/User";
 
 type JwtPayload = {
   userId: string;
+  name: string;
   role: string;
   tokenVersion: number;
 };
@@ -39,6 +40,7 @@ export const isAuth = async (
     }
 
     req.userId = user._id.toString();
+    req.name = user.name.toString();
     req.role = user.role;
 
     console.log("AUTH HEADER:", req.headers.authorization);

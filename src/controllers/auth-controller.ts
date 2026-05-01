@@ -12,94 +12,94 @@ import { generateDeviceHash } from "../utils/device";
 
 // ================= TOKENS =================
 const generateTokens = (user: any) => {
-    const JWT_SECRET = process.env.JWT_SECRET;
-    const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+  const JWT_SECRET = process.env.JWT_SECRET;
+  const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 
-    if (!JWT_SECRET || !JWT_REFRESH_SECRET) {
-        console.error("❌ JWT ENV ERROR:", {
-            JWT_SECRET,
-            JWT_REFRESH_SECRET,
-        });
-        throw new Error("JWT secrets missing");
-    }
+  if (!JWT_SECRET || !JWT_REFRESH_SECRET) {
+    console.error("❌ JWT ENV ERROR:", {
+      JWT_SECRET,
+      JWT_REFRESH_SECRET,
+    });
+    throw new Error("JWT secrets missing");
+  }
 
-    const accessToken = jwt.sign(
-        {
-            userId: user._id,
-            role: user.role,
-            tokenVersion: user.tokenVersion,
-        },
-        JWT_SECRET,
-        { expiresIn: "15m" }
-    );
+  const accessToken = jwt.sign(
+    {
+      userId: user._id,
+      role: user.role,
+      tokenVersion: user.tokenVersion,
+    },
+    JWT_SECRET,
+    { expiresIn: "15m" }
+  );
 
-    const refreshToken = jwt.sign(
-        { userId: user._id },
-        JWT_REFRESH_SECRET,
-        { expiresIn: "7d" }
-    );
+  const refreshToken = jwt.sign(
+    { userId: user._id },
+    JWT_REFRESH_SECRET,
+    { expiresIn: "7d" }
+  );
 
-    return { accessToken, refreshToken };
+  return { accessToken, refreshToken };
 };
 
 // ================= SECURITY LOGGER =================
 export const logSecurityEvent = async (
-    userId: string,
-    req: Request,
-    action: string
+  userId: string,
+  req: Request,
+  action: string
 ) => {
-    await SecurityLog.create({
-        userId,
-        ip: req.ip,
-        device: req.headers["user-agent"],
-        action,
-    });
+  await SecurityLog.create({
+    userId,
+    ip: req.ip,
+    device: req.headers["user-agent"],
+    action,
+  });
 };
 
 // ================= REGISTER =================
 export const register = async (req: Request, res: Response) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty())
-        return res.status(400).json(errors.array());
+  const errors = validationResult(req);
+  if (!errors.isEmpty())
+    return res.status(400).json(errors.array());
 
-    const { name, email, password } = req.body;
+  const { name, email, password } = req.body;
 
-    const existing = await User.findOne({ email });
-    if (existing)
-        return res.status(400).json({ message: "Email already exists" });
+  const existing = await User.findOne({ email });
+  if (existing)
+    return res.status(400).json({ message: "Email already exists" });
 
-    const hashed = await bcrypt.hash(password, 12);
+  const hashed = await bcrypt.hash(password, 12);
 
-    // 🔐 CREATE EMAIL TOKEN
-    const token = crypto.randomBytes(32).toString("hex");
+  // 🔐 CREATE EMAIL TOKEN
+  const token = crypto.randomBytes(32).toString("hex");
 
-    // ✅ CHECK IF ADMIN
-    const isAdmin = email === process.env.ADMIN_EMAIL;
+  // ✅ CHECK IF ADMIN
+  const isAdmin = email === process.env.ADMIN_EMAIL;
 
-    const user = await User.create({
-        name,
-        email,
-        password: hashed,
+  const user = await User.create({
+    name,
+    email,
+    password: hashed,
 
-        role: isAdmin ? "admin" : "user",
+    role: isAdmin ? "admin" : "user",
 
-        isVerified: isAdmin ? true : false,
+    isVerified: isAdmin ? true : false,
 
-        emailToken: isAdmin ? undefined : token,
+    emailToken: isAdmin ? undefined : token,
 
-        emailTokenExpires: isAdmin
-            ? undefined
-            : new Date(Date.now() + 1000 * 60 * 60),
-    });
+    emailTokenExpires: isAdmin
+      ? undefined
+      : new Date(Date.now() + 1000 * 60 * 60),
+  });
 
-    // 📧 SEND EMAIL
-    if (!isAdmin) {
-        const verifyLink = `${process.env.FRONTEND_URL}/auth/verify-email?token=${token}`;
+  // 📧 SEND EMAIL
+  if (!isAdmin) {
+    const verifyLink = `${process.env.FRONTEND_URL}/auth/verify-email?token=${token}`;
 
-        await sendEmail(
-            email,
-            "Verify your account",
-            `
+    await sendEmail(
+      email,
+      "Verify your account",
+      `
   <div style="font-family:Arial;padding:20px;background:#0f172a;color:#fff">
     <div style="max-width:500px;margin:auto;background:#111827;padding:30px;border-radius:10px">
       
@@ -128,33 +128,33 @@ export const register = async (req: Request, res: Response) => {
     </div>
   </div>
   `
-        );
-    }
+    );
+  }
 
-    res.json({
-        message: "Account created. Please verify your email.",
-    });
+  res.json({
+    message: "Account created. Please verify your email.",
+  });
 };
 
 export const verifyEmail = async (req: Request, res: Response) => {
-    const token = req.query.token as string;
+  const token = req.query.token as string;
 
-    const user = await User.findOne({
-        emailToken: token,
-        emailTokenExpires: { $gt: Date.now() },
-    });
+  const user = await User.findOne({
+    emailToken: token,
+    emailTokenExpires: { $gt: Date.now() },
+  });
 
-    if (!user) {
-        return res.status(400).json({ message: "Invalid or expired token" });
-    }
+  if (!user) {
+    return res.status(400).json({ message: "Invalid or expired token" });
+  }
 
-    user.isVerified = true;
-    user.emailToken = undefined;
-    user.emailTokenExpires = undefined;
+  user.isVerified = true;
+  user.emailToken = undefined;
+  user.emailTokenExpires = undefined;
 
-    await user.save();
+  await user.save();
 
-    res.json({ message: "Email verified successfully 🎉" });
+  res.json({ message: "Email verified successfully 🎉" });
 };
 
 // ================= LOGIN =================
@@ -285,69 +285,69 @@ export const login = async (req: Request, res: Response) => {
 
 // ================= FORGOT PASSWORD =================
 export const forgotPassword = async (req: Request, res: Response) => {
-    const { email } = req.body;
+  const { email } = req.body;
 
-    const user = await User.findOne({ email });
-    if (!user)
-        return res.status(404).json({ message: "User not found" });
+  const user = await User.findOne({ email });
+  if (!user)
+    return res.status(404).json({ message: "User not found" });
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    user.otp = await bcrypt.hash(otp, 10);
-    user.otpExpires = new Date(Date.now() + 1000 * 60 * 10); // FIXED
-    user.otpAttempts = 0;
+  user.otp = await bcrypt.hash(otp, 10);
+  user.otpExpires = new Date(Date.now() + 1000 * 60 * 10); // FIXED
+  user.otpAttempts = 0;
 
-    await user.save();
+  await user.save();
 
-    const ip = req.ip || "Unknown";
-    const device = req.headers["user-agent"] || "Unknown";
+  const ip = req.ip || "Unknown";
+  const device = req.headers["user-agent"] || "Unknown";
 
-    await sendEmail(
-        user.email,
-        "🔐 Your Reset Code",
-        otpTemplate(user.name, otp, ip, device)
-    );
+  await sendEmail(
+    user.email,
+    "🔐 Your Reset Code",
+    otpTemplate(user.name, otp, ip, device)
+  );
 
-    await logSecurityEvent(user._id.toString(), req, "REQUEST_PASSWORD_RESET");
+  await logSecurityEvent(user._id.toString(), req, "REQUEST_PASSWORD_RESET");
 
-    res.json({ message: "OTP sent to email" });
+  res.json({ message: "OTP sent to email" });
 };
 
 // ================= VERIFY OTP =================
 export const verifyOTPAndReset = async (req: Request, res: Response) => {
-    const { email, otp, newPassword } = req.body;
+  const { email, otp, newPassword } = req.body;
 
-    const user = await User.findOne({ email });
+  const user = await User.findOne({ email });
 
-    if (!user || !user.otp)
-        return res.status(400).json({ message: "Invalid request" });
+  if (!user || !user.otp)
+    return res.status(400).json({ message: "Invalid request" });
 
-    if (!user.otpExpires || user.otpExpires < new Date())
-        return res.status(400).json({ message: "OTP expired" });
+  if (!user.otpExpires || user.otpExpires < new Date())
+    return res.status(400).json({ message: "OTP expired" });
 
-    if ((user.otpAttempts ?? 0) >= 5)
-        return res.status(429).json({ message: "Too many attempts" });
+  if ((user.otpAttempts ?? 0) >= 5)
+    return res.status(429).json({ message: "Too many attempts" });
 
-    const isValid = await bcrypt.compare(otp, user.otp);
+  const isValid = await bcrypt.compare(otp, user.otp);
 
-    if (!isValid) {
-        user.otpAttempts = (user.otpAttempts ?? 0) + 1;
-        await user.save();
-        return res.status(400).json({ message: "Invalid OTP" });
-    }
-
-    // ✅ RESET PASSWORD
-    user.password = await bcrypt.hash(newPassword, 12);
-
-    user.otp = undefined;
-    user.otpExpires = undefined;
-    user.otpAttempts = 0;
-
+  if (!isValid) {
+    user.otpAttempts = (user.otpAttempts ?? 0) + 1;
     await user.save();
+    return res.status(400).json({ message: "Invalid OTP" });
+  }
 
-    await logSecurityEvent(user._id.toString(), req, "PASSWORD_RESET");
+  // ✅ RESET PASSWORD
+  user.password = await bcrypt.hash(newPassword, 12);
 
-    res.json({ message: "Password reset successful" });
+  user.otp = undefined;
+  user.otpExpires = undefined;
+  user.otpAttempts = 0;
+
+  await user.save();
+
+  await logSecurityEvent(user._id.toString(), req, "PASSWORD_RESET");
+
+  res.json({ message: "Password reset successful" });
 };
 
 export const logoutDevice = async (req: AuthRequest, res: Response) => {

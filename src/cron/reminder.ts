@@ -1,9 +1,8 @@
 import cron from "node-cron";
-import { io } from "../server";
 import User from "../models/User";
 import Progress from "../models/Progress";
 import { sendEmail } from "../services/email-service";
-
+import { io, userSockets } from "../server";
 
 const isActiveLearner = (logs: any[]) => {
   const last7Days = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -31,6 +30,7 @@ const canSendReminderToday = (user: any) => {
   return last !== today;
 };
 
+// 🕘 DAILY CHECK
 cron.schedule("0 9 * * *", async () => {
   console.log("🔥 Smart Reminder System Running...");
 
@@ -54,6 +54,7 @@ cron.schedule("0 9 * * *", async () => {
     const logs = await Progress.find({ userId: user._id });
 
     const active = isActiveLearner(logs);
+
     const streakRisk = isStreakAtRisk(
       user.streak?.current || 0,
       user.streak?.lastActiveDate || new Date()
@@ -61,15 +62,22 @@ cron.schedule("0 9 * * *", async () => {
 
     const notSpammed = canSendReminderToday(user);
 
-    // 🚨 FINAL DECISION ENGINE
     if (active && streakRisk && notSpammed && daysSince >= 1) {
+      
+      // 📧 EMAIL
       await sendEmail(
         user.email,
         "🔥 Your streak is at risk!",
         `<p>Don’t break your momentum — log today’s progress.</p>`
       );
 
-      // update spam protection
+      // 🧠 SAVE NOTIFICATION
+      user.notifications.push({
+        message: "🔥 Your streak is at risk!",
+        read: false,
+        createdAt: new Date(),
+      });
+
       user.reminder = {
         lastRemindedAt: new Date(),
         reminderCountToday: (user.reminder?.reminderCountToday || 0) + 1,
@@ -77,30 +85,16 @@ cron.schedule("0 9 * * *", async () => {
         unread: true,
       };
 
-      user.notifications.push({
-        message: "🔥 Your streak is at risk!",
-        read: false,
-        createdAt: new Date(),
-      });
-
       await user.save();
 
-      // ⚡ REAL-TIME PUSH
-      const userSockets = new Map();
+      // ⚡ REAL-TIME SOCKET PUSH
+      const socketId = userSockets.get(user._id.toString());
 
-      io.on("connection", (socket) => {
-        socket.on("register", (userId) => {
-          userSockets.set(userId, socket.id);
+      if (socketId) {
+        io.to(socketId).emit("notification", {
+          message: "🔥 Your streak is at risk!",
         });
-
-        socket.on("disconnect", () => {
-          for (const [userId, id] of userSockets.entries()) {
-            if (id === socket.id) {
-              userSockets.delete(userId);
-            }
-          }
-        });
-      });
+      }
     }
   }
 });
