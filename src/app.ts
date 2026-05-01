@@ -15,8 +15,11 @@ import leaderboardRoutes from "./routes/leaderboard-routes";
 import settingsRoutes from "./routes/settings-routes";
 import searchRoutes from "./routes/search-routes";
 import aiRoutes from "./routes/ai-routes";
+import webhookRoutes from "./routes/webhook-routes";
 
 const app = express();
+
+app.set("trust proxy", 1);
 
 // 🔐 HELMET (STRONG MODE)
 app.use(helmet());
@@ -56,6 +59,8 @@ export const authLimiter = rateLimit({
 });
 
 
+app.use("/api/webhooks/resend", express.raw({ type: "application/json" }));
+
 // 🚀 ROUTES
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
@@ -67,5 +72,6 @@ app.use("/api/settings", settingsRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/ai", aiRoutes)
 app.use("/uploads", express.static("uploads"));
+app.use("/api/webhooks", webhookRoutes);
 
 export default app;

@@ -76,6 +76,8 @@ export const register = async (req: Request, res: Response) => {
   // ✅ CHECK IF ADMIN
   const isAdmin = email === process.env.ADMIN_EMAIL;
 
+  const SKIP_EMAIL_VERIFICATION = process.env.SKIP_EMAIL_VERIFICATION === "true";
+
   const user = await User.create({
     name,
     email,
@@ -93,13 +95,14 @@ export const register = async (req: Request, res: Response) => {
   });
 
   // 📧 SEND EMAIL
-  if (!isAdmin) {
+  if (!isAdmin && !SKIP_EMAIL_VERIFICATION) {
     const verifyLink = `${process.env.FRONTEND_URL}/auth/verify-email?token=${token}`;
 
-    await sendEmail(
-      email,
-      "Verify your account",
-      `
+    try {
+      await sendEmail(
+        email,
+        "Verify your account",
+        `
   <div style="font-family:Arial;padding:20px;background:#0f172a;color:#fff">
     <div style="max-width:500px;margin:auto;background:#111827;padding:30px;border-radius:10px">
       
@@ -128,7 +131,10 @@ export const register = async (req: Request, res: Response) => {
     </div>
   </div>
   `
-    );
+      );
+    } catch (err) {
+      console.error("❌ EMAIL ERROR:", err);
+    }
   }
 
   res.json({
@@ -208,11 +214,22 @@ export const login = async (req: Request, res: Response) => {
     return res.status(400).json({ message: "Invalid credentials" });
 
   // ✅ email verification check
+  // if (!user.isVerified && user.role !== "admin") {
+  //   return res.status(403).json({
+  //     message: "Please verify your email before login",
+  //   });
+  // }
+
+  const SKIP_EMAIL_VERIFICATION = process.env.SKIP_EMAIL_VERIFICATION === "true";
+
+// email verification check
+if (!SKIP_EMAIL_VERIFICATION) {
   if (!user.isVerified && user.role !== "admin") {
     return res.status(403).json({
       message: "Please verify your email before login",
     });
   }
+}
 
   const match = await bcrypt.compare(password, user.password);
   if (!match)
@@ -257,11 +274,15 @@ export const login = async (req: Request, res: Response) => {
       severity: "warning",
     });
 
-    await sendEmail(
-      user.email,
-      "New Device Login Alert",
-      `A new device just logged into your account.\nIP: ${ip}\nDevice: ${device}`
-    );
+    try {
+      await sendEmail(
+        user.email,
+        "New Device Login Alert",
+        `A new device just logged into your account.\nIP: ${ip}\nDevice: ${device}`
+      );
+    } catch (err) {
+      console.error("❌ EMAIL ERROR:", err);
+    }
 
     user.trustedDevices.push({
       deviceHash,
@@ -302,11 +323,15 @@ export const forgotPassword = async (req: Request, res: Response) => {
   const ip = req.ip || "Unknown";
   const device = req.headers["user-agent"] || "Unknown";
 
+  try {
   await sendEmail(
     user.email,
     "🔐 Your Reset Code",
     otpTemplate(user.name, otp, ip, device)
   );
+  } catch (err) {
+    console.error("❌ EMAIL ERROR:", err);
+  };
 
   await logSecurityEvent(user._id.toString(), req, "REQUEST_PASSWORD_RESET");
 

@@ -1,26 +1,55 @@
 // services/email-service.ts
-import nodemailer from "nodemailer";
+// import nodemailer from "nodemailer";
 
-export const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+// export const transporter = nodemailer.createTransport({
+//   host: process.env.EMAIL_HOST,
+//   service: "gmail",
+//   auth: {
+//     user: process.env.EMAIL_USER,
+//     pass: process.env.EMAIL_PASS,
+//   },
+// });
 
-export const sendEmail = async (
-  to: string,
-  subject: string,
-  html?: string
-) => {
-  await transporter.sendMail({
-    from: `"SkillPulse 🚀" <${process.env.EMAIL_USER}>`,
-    to,
-    subject,
-    html,
-  });
+// export const sendEmail = async (
+//   to: string,
+//   subject: string,
+//   html?: string
+// ) => {
+//   await transporter.sendMail({
+//     from: `"SkillPulse 🚀" <${process.env.EMAIL_USER}>`,
+//     to,
+//     subject,
+//     html,
+//   });
+// };
+
+import { Resend } from "resend";
+import EmailLog from "../models/EmailLog";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+export const sendEmail = async (to: string, subject: string, html: string) => {
+  try {
+    const data = await resend.emails.send({
+      from: "SkillPulse <skillpulse@resend.dev>",
+      to,
+      subject,
+      html,
+    });
+
+    await EmailLog.create({
+      // emailId: data.id,
+      to,
+      subject,
+      status: "sent",
+      createdAt: new Date(),
+    });
+
+    return data;
+  } catch (error) {
+    console.error("❌ EMAIL ERROR:", error);
+    throw error;
+  }
 };
 
 export const otpTemplate = (name: string, otp: string, ip: string, device: string) => {
