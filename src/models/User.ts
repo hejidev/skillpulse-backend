@@ -1,7 +1,22 @@
 import mongoose, { Schema, Document } from "mongoose";
 
+interface IUserNotification {
+  message: string;
+
+  type:
+    | "info"
+    | "success"
+    | "warning"
+    | "error";
+
+  read: boolean;
+
+  archived: boolean;
+
+  createdAt: Date;
+}
+
 export interface IUser extends Document {
-  _id: mongoose.Types.ObjectId;
   name: string;
   email: string;
   password: string;
@@ -12,113 +27,159 @@ export interface IUser extends Document {
 
   otp?: string;
   otpExpires?: Date;
-  otpAttempts?: number;
+  otpAttempts: number;
 
   tokenVersion: number;
   lastIP?: string;
 
-  role: "user" | "admin";
+  role:
+  "user"
+  | "support"
+  | "admin"
+  | "super_admin";
+
+  status:
+  | "active"
+  | "suspended"
+  | "pending";
+
+  permissions: string[];
+
+  premium: boolean;
+
+  isOnline: boolean;
+  lastSeen?: Date;
+
+  lastLoginAt?: Date;
+
+  riskScore: number;
+
+  securityFlags?: string[];
 
   avatar: string;
 
   streak: {
     current: number;
     longest: number;
-    lastActiveDate: Date;
+    lastActiveDate?: Date;
     freezeCount: number;
   };
+
+  highest: number;
+
+  lastActiveDate?: Date;
 
   reminder: {
     lastRemindedAt?: Date;
     reminderCountToday: number;
     lastMessage?: string;
-    unread?: boolean;
+    unread: boolean;
   };
 
-  notifications: {
-    message: string;
-    read: boolean;
-    createdAt: Date;
-  }[];
+  notifications: IUserNotification[];
 
   emailNotifications: boolean;
   pushNotifications: boolean;
   theme: string;
 
   trustedDevices: {
-    deviceHash: String,
-    device: String,
-    ip: String,
-    lastUsed: Date
+    deviceHash: string;
+    device: string;
+    ip: string;
+    lastUsed: Date;
   }[];
 }
 
 const userSchema = new Schema<IUser>({
   name: { type: String, required: true },
 
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-  },
-
+  email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
 
-  // ✅ ADD THIS BLOCK
   isVerified: { type: Boolean, default: false },
-  emailToken: { type: String },
-  emailTokenExpires: { type: Date }, // 1 hour
+  emailToken: String,
+  emailTokenExpires: Date,
 
-  otp: { type: String },
-  otpExpires: { type: Date },
+  otp: String,
+  otpExpires: Date,
   otpAttempts: { type: Number, default: 0 },
 
   tokenVersion: { type: Number, default: 0 },
-  lastIP: { type: String },
+  lastIP: String,
 
-  role: {
+  role: { type: String, enum: ["user", "admin", "support", "super_admin"], default: "user" },
+
+  status: {
     type: String,
-    enum: ["user", "admin"],
-    default: "user",
+    enum: ["active", "suspended", "pending"],
+    default: "active",
   },
+
+  premium: {
+  type: Boolean,
+  default: false,
+},
+
+  permissions: [
+    {
+      type: String,
+    },
+  ],
+
+  isOnline: {
+    type: Boolean,
+    default: false,
+  },
+
+  lastSeen: Date,
+
+  lastLoginAt: Date,
+
+  riskScore: {
+    type: Number,
+    default: 0,
+  },
+
+  securityFlags: [
+    {
+      type: String,
+    },
+  ],
 
   avatar: { type: String, default: "" },
 
   streak: {
     current: { type: Number, default: 0 },
     longest: { type: Number, default: 0 },
-    lastActiveDate: { type: Date },
-    freezeCount: { type: Number, default: 1 }, // 🔥 streak freeze tokens
+    lastActiveDate: Date,
+    freezeCount: { type: Number, default: 1 },
   },
 
+   highest: {
+    type: Number,
+    default: 0,
+  },
+
+  lastActiveDate: Date,
+
   reminder: {
-    lastRemindedAt: { type: Date },
+    lastRemindedAt: Date,
     reminderCountToday: { type: Number, default: 0 },
-    lastMessage: { type: String },
+    lastMessage: String,
     unread: { type: Boolean, default: false },
   },
 
   notifications: [
     {
-      _id: Object,
       message: String,
       type: {
         type: String,
         enum: ["info", "success", "warning", "error"],
         default: "info",
       },
-      read: {
-        type: Boolean,
-        default: false,
-      },
-      archived: {
-        type: Boolean,
-        default: false,
-      },
-      createdAt: {
-        type: Date,
-        default: Date.now,
-      },
+      read: { type: Boolean, default: false },
+      archived: { type: Boolean, default: false },
+      createdAt: { type: Date, default: Date.now },
     },
   ],
 
@@ -132,9 +193,12 @@ const userSchema = new Schema<IUser>({
       device: String,
       ip: String,
       lastUsed: { type: Date, default: Date.now },
-    }
+    },
   ],
-
-});
+},
+  {
+    timestamps: true,
+  }
+);
 
 export default mongoose.model<IUser>("User", userSchema);

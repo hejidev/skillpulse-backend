@@ -2,6 +2,15 @@
   "name": "skillpulse",
   "version": "1.0.0",
   "description": "my skillpulse website for monitoring health rate",
+  "keywords": [],
+  "homepage": "https://github.com/hejidev/skillpulse-backend#readme",
+  "bugs": {
+    "url": "https://github.com/hejidev/skillpulse-backend/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hejidev/skillpulse-backend.git"
+  },
   "license": "ISC",
   "author": "hejidev",
   "type": "commonjs",
@@ -12,9 +21,12 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.4.0",
+    "@types/systeminformation": "^3.23.1",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^1.41.3",
     "cors": "^2.8.6",
+    "date-fns": "^4.1.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-mongo-sanitize": "^2.2.0",
@@ -29,10 +41,13 @@
     "nodemailer": "^8.0.6",
     "nodemon": "^3.1.14",
     "openai": "^6.34.0",
+    "quill": "^2.0.3",
+    "react-hook-form": "^7.76.0",
+    "react-quill-new": "^3.8.3",
     "resend": "^6.12.2",
     "socket.io": "^4.8.3",
     "uuid": "^14.0.0",
-    "zod": "^4.3.6"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -46,9 +61,10 @@
     "compression": "^1.8.1",
     "hpp": "^0.2.3",
     "multer": "^2.1.1",
+    "slugify": "^1.6.9",
+    "systeminformation": "^5.31.6",
     "ts-node-dev": "^2.0.0",
     "typescript": "^6.0.3",
     "xss-clean": "^0.1.4"
-  },
-  "keywords": []
+  }
 }

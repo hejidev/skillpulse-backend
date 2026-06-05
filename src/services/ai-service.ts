@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import AICache from "../models/AICache";
 import { generateHash } from "../utils/hash";
 import { generateCoachMessage } from "../utils/fallback";
+import crypto from "crypto";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -10,67 +11,170 @@ const openai = new OpenAI({
 export async function generateAICoach(
   data: any,
   userId: string,
-  skillId: string,
+  skillId: string
 ) {
   const hash = generateHash(data);
 
-  // ✅ 1. CHECK CACHE FIRST
-  const cached = await AICache.findOne({ hash, userId, skillId });
+  const cached = await AICache.findOne({
+    hash,
+    userId,
+    skillId,
+  });
 
+  // ✅ CACHE HIT
   if (cached) {
-    console.log("⚡ Using cached AI response");
-    return cached.message;
+    return {
+      text: cached.text,
+      mood: cached.mood || "neutral",
+    };
   }
 
   try {
-    const prompt = `
-You are an elite productivity coach.
-
-Analyze the user's learning behavior and give a SHORT but SMART insight.
-
-Skill: ${data.skillName}
-
-Metrics:
-- Streak: ${data.streak}
-- Weekly Hours: ${data.weeklyHours}
-- Last Active: ${data.lastActiveDaysAgo} days ago
-- Goal Progress: ${data.goalPercent}%
-
-Patterns:
-- Best Day: ${data.bestDay}
-- Weakest Day: ${data.worstDay}
-- Consistency Score: ${data.consistencyScore}%
-
-Rules:
-- Be specific (mention days/patterns)
-- Give 1 actionable suggestion
-- Keep it under 20 words
-- Sound like a real coach (not generic)
-
-Example:
-"You focus most on Mondays but drop midweek—add a Wednesday session to stay consistent."
-`;
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("Missing OpenAI API Key");
+    }
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        {
+          role: "user",
+          content: `
+You are Jarvis-level elite AI performance coach.
+
+Skill: ${data.skillName}
+Streak: ${data.streak}
+Weekly Hours: ${data.weeklyHours}
+Last Active: ${data.lastActiveDaysAgo}
+Goal Progress: ${data.goalPercent}%
+Consistency: ${data.consistencyScore}%
+Best Day: ${data.bestDay}
+Worst Day: ${data.worstDay}
+
+Rules:
+- Sound futuristic
+- Be motivational
+- Be emotionally intelligent
+- Max 18 words
+- Give one direct action
+`,
+        },
+      ],
     });
 
-    const message = response.choices[0].message.content || "";
+    const text =
+      response.choices[0].message.content ||
+      "Push harder today.";
 
-    // ✅ 2. SAVE TO CACHE
+    const mood =
+      data.consistencyScore > 70
+        ? "motivational"
+        : data.consistencyScore > 40
+          ? "focused"
+          : "strict";
+
     await AICache.create({
       userId,
       skillId,
       hash,
-      message,
+      text,
+      mood,
     });
 
-    return message;
-  } catch (err) {
-    console.error("❌ AI FAILED → using fallback");
+    return {
+      text,
+      mood,
+    };
+  } catch (err: any) {
+    console.error("AI ERROR:", err.message);
 
-    // ✅ 3. FALLBACK SYSTEM
     return generateCoachMessage(data);
+  }
+}
+
+
+
+/* ======================================================
+   SUPPORT AI AUTO REPLY
+====================================================== */
+
+function hashMessage(message: string) {
+  return crypto
+    .createHash("sha256")
+    .update(message.toLowerCase().trim())
+    .digest("hex");
+}
+
+export async function generateSupportReply(
+  userMessage: string
+) {
+  const hash = hashMessage(userMessage);
+
+  // ✅ CHECK CACHE
+  const cached = await AICache.findOne({
+    hash,
+  });
+
+  if (cached?.reply) {
+    return {
+      reply: cached.reply,
+      cached: true,
+    };
+  }
+
+  try {
+    const completion =
+      await openai.chat.completions.create({
+        model: "gpt-4.1-mini",
+
+        messages: [
+          {
+            role: "system",
+            content: `
+You are an elite SaaS support agent.
+
+Rules:
+- Professional
+- Friendly
+- Short and clear
+- Human-like
+- Never sound robotic
+- Max 40 words
+- If issue sounds dangerous or billing-related,
+  tell user support team will review manually.
+`,
+          },
+
+          {
+            role: "user",
+            content: userMessage,
+          },
+        ],
+
+        temperature: 0.7,
+      });
+
+    const reply =
+      completion.choices[0].message.content ||
+      "We're reviewing your request.";
+
+    // ✅ SAVE CACHE
+    await AICache.create({
+      hash,
+      reply,
+    });
+
+    return {
+      reply,
+      cached: false,
+    };
+  } catch (error) {
+    console.log(error);
+
+    return {
+      reply:
+        "We've received your request and our support team is reviewing it.",
+      cached: false,
+    };
   }
 }

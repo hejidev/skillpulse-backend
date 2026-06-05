@@ -3,7 +3,7 @@ import User from "../models/User";
 import bcrypt from "bcryptjs";
 import { AuthRequest } from "../types/express";
 import SecurityLog from "../models/SecurityLog";
-import { generateDeviceHash } from "../utils/device";
+import { logActivity } from "../lib/activity";
 
 // ================= PROFILE =================
 export const getProfile = async (req: AuthRequest, res: Response) => {
@@ -18,7 +18,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
   let updateData: any = { name };
 
   if (req.file) {
-    updateData.avatar = req.file.path; // ✅ Cloudinary URL
+    updateData.avatar = req.file.path;
   }
 
   const user = await User.findByIdAndUpdate(
@@ -63,7 +63,9 @@ export const markNotificationsRead = async (req: AuthRequest, res: Response) => 
     { $set: { "notifications.$[].read": true } }
   );
 
-  res.json({ message: "Marked as read" });
+  const user = await User.findById(req.userId);
+
+  res.json(user?.notifications || []);
 };
 
 // MARK ONE AS READ
@@ -75,7 +77,8 @@ export const markOneRead = async (req: AuthRequest, res: Response) => {
     { $set: { "notifications.$.read": true } }
   );
 
-  res.json({ message: "Marked as read" });
+  const user = await User.findById(req.userId);
+  res.json(user?.notifications);
 };
 
 // ARCHIVE ONE NOTIFICATION
@@ -87,17 +90,19 @@ export const archiveNotification = async (req: AuthRequest, res: Response) => {
     { $set: { "notifications.$.archived": true } }
   );
 
-  res.json({ message: "Archived" });
+  const user = await User.findById(req.userId);
+
+  res.json(user?.notifications);
 };
 
 // CLEAR ARCHIVED NOTIFICATIONS
 export const clearArchived = async (req: AuthRequest, res: Response) => {
   await User.updateOne(
     { _id: req.userId },
-    { $pull: { notifications: { archived: true } } }
+    { $set: { notifications: [] } }
   );
 
-  res.json({ message: "Archived cleared" });
+  res.json([]);
 };
 
 // DELETE ONE NOTIFICATION
@@ -113,7 +118,9 @@ export const deleteNotification = async (req: AuthRequest, res: Response) => {
     }
   );
 
-  res.json({ message: "Notification deleted" });
+  const user = await User.findById(req.userId);
+
+  res.json(user?.notifications);
 };
 
 // CLEAR ALL NOTIFICATIONS
@@ -125,7 +132,7 @@ export const clearNotifications = async (req: AuthRequest, res: Response) => {
     }
   );
 
-  res.json({ message: "All notifications cleared" });
+  res.json([]);
 };
 
 // ================= REMINDER =================
@@ -188,6 +195,19 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
     severity: "info",
   });
 
+  await logActivity({
+    userId: req.userId,
+
+    type: "security_alert",
+
+    title: "Password Changed",
+
+    description:
+      "User changed account password",
+
+    severity: "warning",
+  });
+
   await user.save();
 
   res.json({ message: "Password updated successfully" });
@@ -198,6 +218,20 @@ export const deleteAccount = async (
   req: AuthRequest,
   res: Response
 ) => {
+
+  await logActivity({
+    userId: req.userId,
+
+    type: "security_alert",
+
+    title: "Account Deleted",
+
+    description:
+      "User deleted account",
+
+    severity: "danger",
+  });
+
   await User.findByIdAndDelete(req.userId);
 
   res.json({ message: "Account deleted" });

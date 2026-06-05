@@ -34,11 +34,18 @@ const canSendReminderToday = (user: any) => {
 cron.schedule("0 9 * * *", async () => {
   console.log("🔥 Smart Reminder System Running...");
 
-  const users = await User.find({
-    emailNotifications: true,
-  });
+  
+const cursor = User.find({
+  emailNotifications: true,
+}).cursor();
 
-  for (const user of users) {
+for (
+  let user =
+    await cursor.next();
+  user != null;
+  user =
+    await cursor.next()
+) {
     if (!user.email) continue;
 
     const lastProgress = await Progress.findOne({
@@ -71,12 +78,22 @@ cron.schedule("0 9 * * *", async () => {
         `<p>Don’t break your momentum — log today’s progress.</p>`
       );
 
+      if (!user.notifications) {
+  user.notifications = [];
+}
+
       // 🧠 SAVE NOTIFICATION
-      user.notifications.push({
-        message: "🔥 Your streak is at risk!",
-        read: false,
-        createdAt: new Date(),
-      });
+     await User.findByIdAndUpdate(user._id, {
+  $push: {
+    notifications: {
+      message: "🔥 Your streak is at risk!",
+      type: "warning",
+      read: false,
+      archived: false,
+      createdAt: new Date(),
+    },
+  },
+});
 
       user.reminder = {
         lastRemindedAt: new Date(),

@@ -1,14 +1,24 @@
 import { Response, NextFunction } from "express";
 import { AuthRequest } from "../types/express";
 
-export const isAdmin = (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-) => {
-  if (req.role !== "admin") {
-    return res.status(403).json({ message: "Access denied" });
-  }
+export const requireRole =
+  (...roles: string[]) =>
+  (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ) => {
+    if (!req.role) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
 
-  next();
-};
+    if (!roles.includes(req.role)) {
+      return res.status(403).json({
+        message: "Forbidden",
+      });
+    }
+
+    next();
+  };

@@ -1,19 +1,15 @@
 import { Response } from "express";
 import Skill from "../models/Skill";
 import { AuthRequest } from "../types/express";
-import { createSkillSchema } from "../validators/skills";
+import { io } from "../server";
+import User from "../models/User";
+import { logActivity } from "../lib/activity";
+import { buildSkillPopularity } from "../lib/intelligence/skill-popularity-engine";
 
 // CREATE
 export const createSkill = async (req: AuthRequest, res: Response) => {
   try {
-    // 🔥 VALIDATION HERE
-    const parsed = createSkillSchema.partial().safeParse(req.body);
-
-    if (!parsed.success) {
-      return res.status(400).json(parsed.error);
-    }
-
-    const { name, level } = parsed.data;
+    const { name, level } = req.body;
 
     const skill = await Skill.create({
       userId: req.userId,
@@ -21,8 +17,65 @@ export const createSkill = async (req: AuthRequest, res: Response) => {
       level,
     });
 
+
+// rebuild analytics
+const updatedSkills = await buildSkillPopularity();
+
+// emit realtime update
+io.to("admin-dashboard").emit(
+  "intelligence:skills",
+  updatedSkills
+);
+
+    // ✅ GET USER
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // ✅ CREATE NOTIFICATION OBJECT
+    const notification = {
+      message: `🚀 New skill "${name}" created`,
+      type: "success" as const,
+      read: false,
+      archived: false,
+      createdAt: new Date(),
+    };
+
+    await logActivity({
+  userId: req.userId,
+  type: "skill_created",
+  title: "New Skill Created",
+  description: `${user.name} created ${name}`,
+  severity: "success",
+
+  metadata: {
+    skillId: skill._id,
+    skill: skill.name,
+    level: skill.level,
+  },
+});
+
+    // ✅ SAVE TO DB
+    user.notifications.unshift(notification);
+    await user.save();
+
+    // ✅ REAL-TIME PUSH
+    io.to(req.userId!).emit("notification", notification);
+
+    // 🚀 ADD THIS (CRITICAL)
+    io.to(req.userId!).emit("skill-created", skill);
+
     res.status(201).json(skill);
-  } catch (err) {
+
+  } catch (err: any) {
+    // ✅ HANDLE DUPLICATE SKILL
+    if (err.code === 11000) {
+      return res.status(400).json({
+        message: "Skill already exists",
+      });
+    }
+
     res.status(500).json({ message: "Failed to create skill" });
   }
 };

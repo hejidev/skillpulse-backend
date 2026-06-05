@@ -30,22 +30,26 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const sendEmail = async (to: string, subject: string, html: string) => {
   try {
-    const data = await resend.emails.send({
-      from: "SkillPulse <skillpulse@resend.dev>",
-      to,
-      subject,
-      html,
-    });
+    const response = await resend.emails.send({
+  from:
+    "SkillPulse <onboarding@resend.dev>",
+  to,
+  subject,
+  html,
+});
 
-    await EmailLog.create({
-      // emailId: data.id,
-      to,
-      subject,
-      status: "sent",
-      createdAt: new Date(),
-    });
+if (response.error) {
+  throw response.error;
+}
 
-    return data;
+await EmailLog.create({
+  emailId: response.data?.id,
+  to,
+  subject,
+  status: "sent",
+});
+
+    return response.data;
   } catch (error) {
     console.error("❌ EMAIL ERROR:", error);
     throw error;

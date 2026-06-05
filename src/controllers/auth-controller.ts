@@ -9,6 +9,7 @@ import { sendEmail } from "../services/email-service";
 import { otpTemplate } from "../services/email-template";
 import SecurityLog from "../models/SecurityLog";
 import { generateDeviceHash } from "../utils/device";
+import { logActivity } from "../lib/activity";
 
 // ================= TOKENS =================
 const generateTokens = (user: any) => {
@@ -58,88 +59,64 @@ export const logSecurityEvent = async (
 
 // ================= REGISTER =================
 export const register = async (req: Request, res: Response) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty())
-    return res.status(400).json(errors.array());
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty())
+      return res.status(400).json(errors.array());
 
-  const { name, email, password } = req.body;
+    const { name, email, password } = req.body;
 
-  const existing = await User.findOne({ email });
-  if (existing)
-    return res.status(400).json({ message: "Email already exists" });
+    const existing = await User.findOne({ email });
+    if (existing)
+      return res.status(400).json({ message: "Email already exists" });
 
-  const hashed = await bcrypt.hash(password, 12);
+    const hashed = await bcrypt.hash(password, 12);
+    const token = crypto.randomBytes(32).toString("hex");
 
-  // 🔐 CREATE EMAIL TOKEN
-  const token = crypto.randomBytes(32).toString("hex");
+    const isAdmin = email === process.env.ADMIN_EMAIL;
 
-  // ✅ CHECK IF ADMIN
-  const isAdmin = email === process.env.ADMIN_EMAIL;
+    const SKIP_EMAIL_VERIFICATION =
+      process.env.SKIP_EMAIL_VERIFICATION === "true";
 
-  const SKIP_EMAIL_VERIFICATION = process.env.SKIP_EMAIL_VERIFICATION === "true";
+    const user = await User.create({
+      name,
+      email,
+      password: hashed,
+      role: isAdmin ? "admin" : "user",
+      isVerified: isAdmin ? true : false,
+      emailToken: isAdmin ? undefined : token,
+      emailTokenExpires: isAdmin
+        ? undefined
+        : new Date(Date.now() + 1000 * 60 * 60),
+    });
 
-  const user = await User.create({
-    name,
-    email,
-    password: hashed,
+    // 🔥 ALWAYS SEND EMAIL IF NOT VERIFIED
+    if (!isAdmin && !SKIP_EMAIL_VERIFICATION) {
+      const verifyLink = `${process.env.FRONTEND_URL}/auth/verify-email?token=${token}`;
 
-    role: isAdmin ? "admin" : "user",
-
-    isVerified: isAdmin ? true : false,
-
-    emailToken: isAdmin ? undefined : token,
-
-    emailTokenExpires: isAdmin
-      ? undefined
-      : new Date(Date.now() + 1000 * 60 * 60),
-  });
-
-  // 📧 SEND EMAIL
-  if (!isAdmin && !SKIP_EMAIL_VERIFICATION) {
-    const verifyLink = `${process.env.FRONTEND_URL}/auth/verify-email?token=${token}`;
-
-    try {
       await sendEmail(
         email,
         "Verify your account",
-        `
-  <div style="font-family:Arial;padding:20px;background:#0f172a;color:#fff">
-    <div style="max-width:500px;margin:auto;background:#111827;padding:30px;border-radius:10px">
-      
-      <h2 style="color:#22c55e">Welcome to SkillPulse 🚀</h2>
-      
-      <p>Hi ${name},</p>
-      <p>Click the button below to verify your account:</p>
-
-      <a href="${verifyLink}" 
-        style="
-          display:inline-block;
-          padding:12px 20px;
-          background:#22c55e;
-          color:#fff;
-          text-decoration:none;
-          border-radius:6px;
-          margin-top:10px;
-        ">
-        Verify Email
-      </a>
-
-      <p style="margin-top:20px;font-size:12px;color:#9ca3af">
-        This link expires in 1 hour.
-      </p>
-
-    </div>
-  </div>
-  `
-      );
-    } catch (err) {
-      console.error("❌ EMAIL ERROR:", err);
+        `<div style="font-family:Arial;padding:20px;background:#0f172a;color:#fff">
+          <div style="max-width:500px;margin:auto;background:#111827;padding:30px;border-radius:10px">
+            <h2 style="color:#22c55e">Welcome 🚀</h2>
+            <p>Hi ${name},</p>
+            <a href="${verifyLink}" style="padding:12px 20px;background:#22c55e;color:#fff;text-decoration:none;border-radius:6px;display:inline-block">
+              Verify Email
+            </a>
+          </div>
+        </div>`
+      ).catch(console.log);
     }
-  }
 
-  res.json({
-    message: "Account created. Please verify your email.",
-  });
+    return res.json({
+      success: true,
+      message: "Account created successfully. Please verify your email.",
+    });
+  } catch (error) {
+    console.log("REGISTER ERROR:", error);
+    return res.status(500).json({ message: "Registration failed" });
+  }
 };
 
 export const verifyEmail = async (req: Request, res: Response) => {
@@ -164,144 +141,122 @@ export const verifyEmail = async (req: Request, res: Response) => {
 };
 
 // ================= LOGIN =================
-// export const login = async (req: Request, res: Response) => {
-//     const errors = validationResult(req);
-//     if (!errors.isEmpty())
-//         return res.status(400).json(errors.array());
-
-//     const { email, password } = req.body;
-
-//     const user = await User.findOne({ email });
-
-//     if (!user)
-//         return res.status(404).json({ message: "User not found" });
-
-//     if (!user.isVerified && user.role !== "admin") {
-//         return res.status(403).json({
-//             message: "Please verify your email before login",
-//         });
-//     }
-
-//     const match = await bcrypt.compare(password, user.password);
-
-//     if (!match) {
-//         await logSecurityEvent(user._id.toString(), req, "FAILED_LOGIN");
-//         return res.status(400).json({ message: "Invalid credentials" });
-//     }
-
-//     await logSecurityEvent(user._id.toString(), req, "LOGIN");
-
-//     if (user.lastIP && user.lastIP !== req.ip) {
-//         await sendEmail(
-//             user.email,
-//             "⚠️ New Login Detected",
-//             `<p>New login from IP: ${req.ip}</p>`
-//         );
-//     }
-
-//     user.lastIP = req.ip;
-//     await user.save();
-
-//     const tokens = generateTokens(user);
-
-//     res.json(tokens); // ✅ MUST match frontend
-// };
 export const login = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-  const user = await User.findOne({ email });
-  if (!user)
-    return res.status(400).json({ message: "Invalid credentials" });
+    const user = await User.findOne({ email });
 
-  // ✅ email verification check
-  // if (!user.isVerified && user.role !== "admin") {
-  //   return res.status(403).json({
-  //     message: "Please verify your email before login",
-  //   });
-  // }
+    if (!user)
+      return res.status(400).json({ message: "Invalid credentials" });
 
-  const SKIP_EMAIL_VERIFICATION = process.env.SKIP_EMAIL_VERIFICATION === "true";
+    const match = await bcrypt.compare(password, user.password);
 
-// email verification check
-if (!SKIP_EMAIL_VERIFICATION) {
-  if (!user.isVerified && user.role !== "admin") {
-    return res.status(403).json({
-      message: "Please verify your email before login",
-    });
-  }
-}
+    if (!match)
+      return res.status(400).json({ message: "Invalid credentials" });
 
-  const match = await bcrypt.compare(password, user.password);
-  if (!match)
-    return res.status(400).json({ message: "Invalid credentials" });
+    const SKIP_EMAIL_VERIFICATION =
+      process.env.SKIP_EMAIL_VERIFICATION === "true";
 
-  const ip =
-    (req.headers["x-forwarded-for"] as string) ||
-    req.socket.remoteAddress ||
-    "unknown";
+    // 🚨 HARD BLOCK (FIXED)
+    if (!SKIP_EMAIL_VERIFICATION) {
+      if (!user.isVerified) {
+        return res.status(403).json({
+          message: "Please verify your email before logging in.",
+        });
+      }
+    }
 
-  const device = req.headers["user-agent"] || "unknown device";
+    const rawIP =
+      (req.headers["x-forwarded-for"] as string) ||
+      req.socket.remoteAddress ||
+      "unknown";
 
-  const deviceHash = generateDeviceHash(ip, device);
+    const ip = rawIP.replace("::ffff:", "");
+    const device = req.headers["user-agent"] || "unknown device";
+    const deviceHash = generateDeviceHash(ip, device);
 
-  // ✅ prevent crash
-  if (!user.trustedDevices) {
-    user.trustedDevices = [];
-  }
+    user.trustedDevices = user.trustedDevices || [];
+    user.notifications = user.notifications || [];
+    user.securityFlags = user.securityFlags || [];
 
-  const isTrusted = user.trustedDevices.some(
-    (d: any) => d.deviceHash === deviceHash
-  );
+    const isTrusted = user.trustedDevices.some(
+      (d: any) => d.deviceHash === deviceHash
+    );
 
-  // 🚨 NEW DEVICE
-  if (!isTrusted) {
-    await User.findByIdAndUpdate(user._id, {
-      $push: {
-        notifications: {
-          message: `🚨 New login detected from ${device}`,
-          read: false,
-          createdAt: new Date(),
-        },
-      },
-    });
-
-    await SecurityLog.create({
-      userId: user._id.toString(),
-      ip,
-      device,
-      action: "New Device Login",
-      deviceHash,
-      severity: "warning",
-    });
-
-    try {
+    if (!isTrusted) {
       await sendEmail(
         user.email,
         "New Device Login Alert",
-        `A new device just logged into your account.\nIP: ${ip}\nDevice: ${device}`
-      );
-    } catch (err) {
-      console.error("❌ EMAIL ERROR:", err);
+        `<div style="font-family:Arial;padding:20px">
+          <h2>Security Alert 🚨</h2>
+          <p>New login detected</p>
+          <p><b>IP:</b> ${ip}</p>
+          <p><b>Device:</b> ${device}</p>
+        </div>`
+      ).catch(console.log);
+
+      user.trustedDevices.push({
+        deviceHash,
+        device,
+        ip,
+        lastUsed: new Date(),
+      });
+
+      user.notifications.push({
+        message: `🚨 New login detected from ${device}`,
+        type: "warning",
+        read: false,
+        archived: false,
+        createdAt: new Date(),
+      });
+
+      user.riskScore = (user.riskScore || 0) + 15;
+
+      if (!user.securityFlags.includes("New untrusted device login")) {
+        user.securityFlags.push("New untrusted device login");
+      }
+
+      await logActivity({
+        userId: user._id.toString(),
+        type: "security_alert",
+        title: "Security Alert",
+        description: "New untrusted device login detected",
+        severity: "danger",
+        metadata: { ip, device },
+      });
+
+      await SecurityLog.create({
+        userId: user._id.toString(),
+        ip,
+        device,
+        action: "New Device Login",
+        deviceHash,
+        severity: "warning",
+      });
     }
 
-    user.trustedDevices.push({
-      deviceHash,
-      device,
-      ip,
-      lastUsed: new Date(),
+    user.isOnline = true;
+    user.lastSeen = new Date();
+    user.lastLoginAt = new Date();
+    user.lastIP = ip;
+
+    await user.save();
+
+    const safeUser = await User.findById(user._id).select("-password -otp");
+
+    const tokens = generateTokens(user);
+
+    return res.json({
+      success: true,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      user: safeUser,
     });
+  } catch (error) {
+    console.log("LOGIN ERROR:", error);
+    return res.status(500).json({ message: "Login failed" });
   }
-
-  await user.save();
-
-  // ✅ tokens
-  const tokens = generateTokens(user);
-
-  res.json({
-    accessToken: tokens.accessToken,
-    refreshToken: tokens.refreshToken,
-    user,
-  });
 };
 
 // ================= FORGOT PASSWORD =================
@@ -324,11 +279,11 @@ export const forgotPassword = async (req: Request, res: Response) => {
   const device = req.headers["user-agent"] || "Unknown";
 
   try {
-  await sendEmail(
-    user.email,
-    "🔐 Your Reset Code",
-    otpTemplate(user.name, otp, ip, device)
-  );
+    await sendEmail(
+      user.email,
+      "🔐 Your Reset Code",
+      otpTemplate(user.name, otp, ip, device)
+    );
   } catch (err) {
     console.error("❌ EMAIL ERROR:", err);
   };
@@ -391,4 +346,21 @@ export const logoutDevice = async (req: AuthRequest, res: Response) => {
   });
 
   res.json({ message: "Device logged out" });
+};
+
+export const logout = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  await User.findByIdAndUpdate(
+    req.userId,
+    {
+      isOnline: false,
+      lastSeen: new Date(),
+    }
+  );
+
+  res.json({
+    success: true,
+  });
 };

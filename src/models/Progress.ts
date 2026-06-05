@@ -16,7 +16,6 @@ const progressSchema = new Schema<IProgress>(
     hours: { type: Number, required: true },
     xp: { type: Number, required: true },
     note: String,
-    createdAt: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );
