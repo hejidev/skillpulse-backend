@@ -5,6 +5,7 @@ import {
   forgotPassword,
   verifyOTPAndReset,
   verifyEmail,
+  refreshTokens,
 } from "../controllers/auth-controller";
 
 import { body } from "express-validator";
@@ -50,6 +51,8 @@ router.post(
 );
 
 router.get("/verify-email", verifyEmail);
+router.post("/refresh", refreshTokens);
+
 router.post("/forgot-password", forgotPassword);
 router.post("/verify-otp", verifyOTPAndReset);
 

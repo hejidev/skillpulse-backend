@@ -4,10 +4,10 @@ interface IUserNotification {
   message: string;
 
   type:
-    | "info"
-    | "success"
-    | "warning"
-    | "error";
+  | "info"
+  | "success"
+  | "warning"
+  | "error";
 
   read: boolean;
 
@@ -46,6 +46,26 @@ export interface IUser extends Document {
   permissions: string[];
 
   premium: boolean;
+
+  plan:
+  | "free"
+  | "starter"
+  | "pro"
+  | "enterprise";
+
+  billing: {
+    paystackCustomerCode: string;
+    paystackSubscriptionId: string;
+    currentPeriodStart: Date;
+    currentPeriodEnd: Date;
+    cancelAtPeriodEnd: boolean;
+    status:
+    | "trialing"
+    | "active"
+    | "past_due"
+    | "canceled"
+    | "incomplete";
+  };
 
   isOnline: boolean;
   lastSeen?: Date;
@@ -88,6 +108,26 @@ export interface IUser extends Document {
     ip: string;
     lastUsed: Date;
   }[];
+
+  referralCode?: string;
+  referredByCode?: string;
+  referredByUserId?: mongoose.Types.ObjectId;
+
+  referralStats?: {
+    totalReferrals: number;
+    successfulReferrals: number;
+    pointsEarned: number;
+  };
+
+  wallet?: {
+    points: number;      // SkillPoints / SkillCoins
+    lastUpdatedAt?: Date;
+  };
+
+  twoFactorEnabled?: boolean;
+  twoFactorSecret?: string; // if using TOTP apps like Google Authenticator
+  twoFactorBackupCodes?: string[]; // optional
+  twoFactorTempSecret?: string;
 }
 
 const userSchema = new Schema<IUser>({
@@ -116,9 +156,28 @@ const userSchema = new Schema<IUser>({
   },
 
   premium: {
-  type: Boolean,
-  default: false,
-},
+    type: Boolean,
+    default: false,
+  },
+
+  plan: {
+    type: String,
+    enum: ["free", "starter", "pro", "enterprise"],
+    default: "free",
+  },
+
+  billing: {
+    paystackCustomerCode: { type: String },   // from Paystack
+    paystackSubscriptionId: { type: String }, // from Paystack
+    currentPeriodStart: Date,
+    currentPeriodEnd: Date,
+    cancelAtPeriodEnd: { type: Boolean, default: false },
+    status: {
+      type: String,
+      enum: ["trialing", "active", "past_due", "canceled", "incomplete"],
+      default: "trialing",
+    },
+  },
 
   permissions: [
     {
@@ -155,7 +214,7 @@ const userSchema = new Schema<IUser>({
     freezeCount: { type: Number, default: 1 },
   },
 
-   highest: {
+  highest: {
     type: Number,
     default: 0,
   },
@@ -195,6 +254,26 @@ const userSchema = new Schema<IUser>({
       lastUsed: { type: Date, default: Date.now },
     },
   ],
+
+  referralCode: { type: String, unique: true, sparse: true },
+  referredByCode: String,
+  referredByUserId: { type: Schema.Types.ObjectId, ref: "User" },
+
+  referralStats: {
+    totalReferrals: { type: Number, default: 0 },
+    successfulReferrals: { type: Number, default: 0 },
+    pointsEarned: { type: Number, default: 0 },
+  },
+
+  wallet: {
+    points: { type: Number, default: 0 },
+    lastUpdatedAt: Date,
+  },
+
+  twoFactorEnabled: { type: Boolean, default: false },
+  twoFactorSecret: { type: String }, // for TOTP
+  twoFactorBackupCodes: [{ type: String }],
+  twoFactorTempSecret: { type: [String], default: [] },
 },
   {
     timestamps: true,

@@ -1,11 +1,11 @@
+// middleware/auth-middleware.ts
 import { Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
 import { AuthRequest } from "../types/express";
 import User from "../models/User";
+import { verifyAccessToken } from "../utils/tokens";
 
 type JwtPayload = {
   userId: string;
-  name: string;
   role: string;
   tokenVersion: number;
 };
@@ -18,25 +18,21 @@ export const isAuth = async (
   try {
     const header = req.headers.authorization;
 
-    if (!header || !header.startsWith("Bearer ")) {
+    if (!header) {
       return res.status(401).json({
         success: false,
         message: "No token provided",
       });
+
     }
-
+    
     const token = header.split(" ")[1];
-
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET!
-    ) as JwtPayload;
-
-    // const user = await User.findById(decoded.userId);
-    const user = await User.findById(
-      decoded.userId
-    ).select("+tokenVersion");
-
+    
+    const decoded = verifyAccessToken(token) as JwtPayload;
+    
+    console.log("Auth header:", req.headers.authorization);
+    
+    const user = await User.findById(decoded.userId).select("+tokenVersion");
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -86,30 +82,16 @@ export const isAuthOptional = async (
 ) => {
   try {
     const authHeader = req.headers.authorization;
-
-    if (!authHeader) {
-      return next();
-    }
-
-    if (!authHeader.startsWith("Bearer ")) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return next();
     }
 
     const token = authHeader.split(" ")[1];
+    if (!token) return next();
 
-    if (!token) {
-      return next();
-    }
-
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET!
-    ) as JwtPayload;
-
-    console.log(decoded);
+    const decoded = verifyAccessToken(token) as JwtPayload;
 
     const user = await User.findById(decoded.userId);
-
     if (user) {
       req.userId = user._id.toString();
       req.name = user.name;

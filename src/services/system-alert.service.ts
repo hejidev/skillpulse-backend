@@ -1,5 +1,6 @@
 import { io } from "../server";
 import Message from "../models/Message";
+import { createAdminNotification } from "./admin-notification.service";
 
 
 /* =========================================
@@ -7,12 +8,12 @@ import Message from "../models/Message";
 ========================================= */
 type ThreatEvent = {
   type:
-    | "auth_failure"
-    | "brute_force"
-    | "api_abuse"
-    | "system_error"
-    | "suspicious_activity"
-    | "db_failure";
+  | "auth_failure"
+  | "brute_force"
+  | "api_abuse"
+  | "system_error"
+  | "suspicious_activity"
+  | "db_failure";
 
   severity?: "low" | "medium" | "high" | "critical";
 
@@ -71,46 +72,94 @@ const getRiskLevel = (score: number) => {
 /* =========================================
    MAIN ENGINE
 ========================================= */
-export const processThreatEvent = async (event: ThreatEvent) => {
-  const score = calculateSeverity(event);
-  const risk = getRiskLevel(score);
+export const processThreatEvent = async (
+  event: ThreatEvent
+) => {
 
-  const alert = await createSystemAlert({
-    title: `SOC ALERT: ${event.type}`,
-    content: JSON.stringify(event.metadata || {}, null, 2),
+  const score =
+    calculateSeverity(event);
 
-    priority:
+  const risk =
+    getRiskLevel(score);
+
+  // ====================================
+  // ADMIN NOTIFICATION
+  // ====================================
+  await createAdminNotification({
+    title:
+      `Threat Detected: ${event.type}`,
+
+    message:
+      `Risk level: ${risk}`,
+
+    category: "security",
+
+    severity:
       risk === "critical"
         ? "critical"
         : risk === "high"
-        ? "high"
-        : "medium",
+          ? "warning"
+          : "info",
 
-    threatLevel: risk,
-
-    senderId: "SOC_ENGINE",
+    metadata: {
+      event,
+      score,
+      risk,
+    },
   });
 
-  /* =========================================
-     REAL-TIME STREAM TO ADMIN DASHBOARD
-  ========================================= */
-  io.to("admin-dashboard").emit("socEvent", {
-    ...alert.toObject(),
-    score,
-    riskLevel: risk,
-  });
+  // ====================================
+  // SYSTEM ALERT
+  // ====================================
 
-  /* =========================================
-     AUTO ESCALATION
-  ========================================= */
-  if (risk === "critical") {
-    io.to("admin-dashboard").emit("socEscalation", {
-      message: "CRITICAL THREAT DETECTED",
-      alert,
+  const alert =
+    await createSystemAlert({
+      title:
+        `SOC ALERT: ${event.type}`,
+
+      content: JSON.stringify(
+        event.metadata || {},
+        null,
+        2
+      ),
+
+      priority:
+        risk === "critical"
+          ? "critical"
+          : risk === "high"
+            ? "high"
+            : "medium",
+
+      threatLevel: risk,
+
+      senderId: "SOC_ENGINE",
     });
 
-    // optional: notify system room
-    io.to("admin-analytics").emit("socCritical", alert);
+  io.to("admin-dashboard").emit(
+    "socEvent",
+    {
+      ...alert.toObject(),
+      score,
+      riskLevel: risk,
+    }
+  );
+
+  if (risk === "critical") {
+
+    io.to("admin-dashboard").emit(
+      "socEscalation",
+      {
+        message:
+          "CRITICAL THREAT DETECTED",
+
+        alert,
+      }
+    );
+
+    io.to("admin-analytics").emit(
+      "socCritical",
+      alert
+    );
   }
 
   return alert;

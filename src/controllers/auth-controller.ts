@@ -4,12 +4,22 @@ import User from "../models/User";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
+
+import speakeasy from "speakeasy";
+
 import { validationResult } from "express-validator";
 import { sendEmail } from "../services/email-service";
 import { otpTemplate } from "../services/email-template";
 import SecurityLog from "../models/SecurityLog";
 import { generateDeviceHash } from "../utils/device";
 import { logActivity } from "../lib/activity";
+import { createAdminNotification } from "../services/admin-notification.service";
+import { signAccessToken } from "../utils/sessionMaxAgeMinutes";
+import { signRefreshToken } from "../utils/tokens";
+import { verifyRefreshToken, rotateTokens } from "../utils/tokens";
+import { generateUniqueReferralCode } from "../utils/referral";
+import Referral from "../models/Referral";
+
 
 // ================= TOKENS =================
 const generateTokens = (user: any) => {
@@ -57,6 +67,42 @@ export const logSecurityEvent = async (
   });
 };
 
+
+// async function verifyTwoFactorCode(user: any, code: string): Promise<boolean> {
+//   if (!user.twoFactorSecret) return false;
+
+//   // in verifyTwoFactorCode
+//   console.log("LOGIN 2FA VERIFY", {
+//     userId: user._id.toString(),
+//     email: user.email,
+//     secret: user.twoFactorSecret,
+//     code,
+//   });
+
+//   return speakeasy.totp.verify({
+//     secret: user.twoFactorSecret,
+//     encoding: "base32",
+//     token: code.trim().replace(/\s/g, ""),
+//     window: 2, // allow ±2 time step for clock drift
+//   });
+// }
+
+async function verifyTwoFactorCode(user: any, code: string): Promise<boolean> {
+  const expected = speakeasy.totp({
+    secret: user.twoFactorSecret,
+    encoding: "base32",
+  });
+
+  console.log({
+    storedSecret: user.twoFactorSecret,
+    expectedCode: expected,
+    receivedCode: code,
+  });
+
+  return expected === code.trim();
+}
+
+
 // ================= REGISTER =================
 export const register = async (req: Request, res: Response) => {
   try {
@@ -64,7 +110,7 @@ export const register = async (req: Request, res: Response) => {
     if (!errors.isEmpty())
       return res.status(400).json(errors.array());
 
-    const { name, email, password } = req.body;
+    const { name, email, password, ref } = req.body;
 
     const existing = await User.findOne({ email });
     if (existing)
@@ -78,6 +124,10 @@ export const register = async (req: Request, res: Response) => {
     const SKIP_EMAIL_VERIFICATION =
       process.env.SKIP_EMAIL_VERIFICATION === "true";
 
+
+     // 1) Create user
+    const referralCode = await generateUniqueReferralCode();
+
     const user = await User.create({
       name,
       email,
@@ -88,7 +138,25 @@ export const register = async (req: Request, res: Response) => {
       emailTokenExpires: isAdmin
         ? undefined
         : new Date(Date.now() + 1000 * 60 * 60),
+      referralCode,
     });
+
+     // 2) If they signed up with a referral
+  if (ref) {
+    const referrer = await User.findOne({ referralCode: ref }).select("_id");
+    if (referrer) {
+      user.referredByCode = ref;
+      user.referredByUserId = referrer._id;
+      await user.save();
+
+      await Referral.create({
+        code: ref,
+        referrerId: referrer._id,
+        referredUserId: user._id,
+        status: "signed_up",
+      });
+    }
+  }
 
     // 🔥 ALWAYS SEND EMAIL IF NOT VERIFIED
     if (!isAdmin && !SKIP_EMAIL_VERIFICATION) {
@@ -101,13 +169,29 @@ export const register = async (req: Request, res: Response) => {
           <div style="max-width:500px;margin:auto;background:#111827;padding:30px;border-radius:10px">
             <h2 style="color:#22c55e">Welcome 🚀</h2>
             <p>Hi ${name},</p>
-            <a href="${verifyLink}" style="padding:12px 20px;background:#22c55e;color:#fff;text-decoration:none;border-radius:6px;display:inline-block">
+            <a href="${verifyLink}" style="padding:12px 20px;background:#22c55e;color:#fff;text-decoration:none;border-radius:6px;display:inline-block;cursor:pointer;margin-top:20px">
               Verify Email
             </a>
           </div>
         </div>`
       ).catch(console.log);
     }
+
+    await createAdminNotification({
+      title: "New User Registered",
+
+      message:
+        `${user.name} created an account`,
+
+      category: "user",
+
+      severity: "success",
+
+      metadata: {
+        userId: user._id,
+        email: user.email,
+      },
+    });
 
     return res.json({
       success: true,
@@ -137,36 +221,54 @@ export const verifyEmail = async (req: Request, res: Response) => {
 
   await user.save();
 
+  await createAdminNotification({
+    title: "Email Verified",
+
+    message:
+      `${user.name} verified email address`,
+
+    category: "user",
+
+    severity: "success",
+
+    metadata: {
+      userId: user._id,
+    },
+  });
+
   res.json({ message: "Email verified successfully 🎉" });
 };
 
 // ================= LOGIN =================
-export const login = async (req: Request, res: Response) => {
+export const login = async (req: AuthRequest, res: Response) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, deviceId, twoFactorCode, trustDevice } = req.body;
+    const settings = (req as any).systemSettings;
+
+    // temp: disable enforce2FA while you get setup flow working
+    // const settings = (req as any).systemSettings;
+    // settings.enforce2FA = false;
 
     const user = await User.findOne({ email });
-
-    if (!user)
+    if (!user) {
       return res.status(400).json({ message: "Invalid credentials" });
+    }
 
     const match = await bcrypt.compare(password, user.password);
-
-    if (!match)
+    if (!match) {
       return res.status(400).json({ message: "Invalid credentials" });
+    }
 
     const SKIP_EMAIL_VERIFICATION =
       process.env.SKIP_EMAIL_VERIFICATION === "true";
 
-    // 🚨 HARD BLOCK (FIXED)
-    if (!SKIP_EMAIL_VERIFICATION) {
-      if (!user.isVerified) {
-        return res.status(403).json({
-          message: "Please verify your email before logging in.",
-        });
-      }
+    if (!SKIP_EMAIL_VERIFICATION && !user.isVerified) {
+      return res.status(403).json({
+        message: "Please verify your email before logging in.",
+      });
     }
 
+    // === Device fingerprint / trusted devices ===
     const rawIP =
       (req.headers["x-forwarded-for"] as string) ||
       req.socket.remoteAddress ||
@@ -184,6 +286,55 @@ export const login = async (req: Request, res: Response) => {
       (d: any) => d.deviceHash === deviceHash
     );
 
+    // // === 2FA enforcement + trusted devices lock ===
+    // let require2fa = false;
+
+    // if (settings?.enforce2FA) {
+    //   require2fa = true;
+
+    //   // If we lock by trusted devices and this device is trusted, skip 2FA
+    //   if (settings.trustedDevicesLock && isTrusted) {
+    //     require2fa = false;
+    //   }
+    // }
+
+    // if (require2fa && !user.twoFactorEnabled) {
+    //   return res.status(403).json({
+    //     require2faSetup: true,
+    //     message: "2FA is required. Please set it up to continue.",
+    //   });
+    // }
+
+    // if (require2fa && user.twoFactorEnabled) {
+    //   if (!twoFactorCode) {
+    //     return res.status(403).json({
+    //       require2faVerify: true,
+    //       message: "2FA verification required.",
+    //     });
+    //   }
+
+    //   const ok = await verifyTwoFactorCode(user, twoFactorCode);
+    //   if (!ok) {
+    //     return res.status(403).json({ message: "Invalid 2FA code." });
+    //   }
+    // }
+
+    // Optional 2FA: only apply if user.twoFactorEnabled is true
+    if (user.twoFactorEnabled) {
+      if (!twoFactorCode) {
+        return res.status(403).json({
+          require2faVerify: true,
+          message: "2FA verification required.",
+        });
+      }
+
+      const ok = await verifyTwoFactorCode(user, twoFactorCode.replace(/\s/g, ""));
+      if (!ok) {
+        return res.status(403).json({ message: "Invalid 2FA code." });
+      }
+    }
+
+    // If device not trusted, send security email & logs
     if (!isTrusted) {
       await sendEmail(
         user.email,
@@ -234,6 +385,26 @@ export const login = async (req: Request, res: Response) => {
         deviceHash,
         severity: "warning",
       });
+
+      await createAdminNotification({
+        title: "New Device Login",
+        message: `${user.name} logged in from an untrusted device`,
+        category: "security",
+        severity: "warning",
+        metadata: {
+          userId: user._id,
+          ip,
+          device,
+        },
+      });
+    } else {
+      // update lastUsed if trusted
+      const idx = user.trustedDevices.findIndex(
+        (d: any) => d.deviceHash === deviceHash
+      );
+      if (idx !== -1) {
+        user.trustedDevices[idx].lastUsed = new Date();
+      }
     }
 
     user.isOnline = true;
@@ -241,16 +412,55 @@ export const login = async (req: Request, res: Response) => {
     user.lastLoginAt = new Date();
     user.lastIP = ip;
 
+    console.log("LOGIN BODY", { email, hasTwoFactorCode: !!twoFactorCode });
+
     await user.save();
+
+    if (user.role === "admin" || user.role === "super_admin") {
+      await createAdminNotification({
+        title: "Admin Login",
+        message: `${user.name} logged into the admin panel`,
+        category: "auth",
+        severity: "info",
+        metadata: {
+          adminId: user._id,
+          email: user.email,
+          ip,
+          device,
+        },
+      });
+    }
 
     const safeUser = await User.findById(user._id).select("-password -otp");
 
-    const tokens = generateTokens(user);
+    // === Issue tokens (sessionMaxAgeMinutes applied in signAccessToken) ===
+    const accessToken = signAccessToken(
+      {
+        userId: user._id.toString(),
+        role: user.role,
+        tokenVersion: user.tokenVersion,
+      },
+      req
+    );
+
+    const refreshToken = signRefreshToken(user._id.toString());
+
+    const settingsForCookie = (req as any).systemSettings;
+    const sessionMinutes =
+      settingsForCookie?.sessionMaxAgeMinutes ?? 60 * 24;
+
+    // optional: httpOnly cookie for access token
+    res.cookie("access_token", accessToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      maxAge: sessionMinutes * 60 * 1000,
+    });
 
     return res.json({
       success: true,
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
+      accessToken,
+      refreshToken,
       user: safeUser,
     });
   } catch (error) {
@@ -297,6 +507,18 @@ export const forgotPassword = async (req: Request, res: Response) => {
 export const verifyOTPAndReset = async (req: Request, res: Response) => {
   const { email, otp, newPassword } = req.body;
 
+  if (!email || !otp || !newPassword) {
+    return res.status(400).json({
+      message: "All fields are required",
+    });
+  }
+
+  if (newPassword.length < 8) {
+    return res.status(400).json({
+      message: "Password must be at least 8 characters",
+    });
+  }
+
   const user = await User.findOne({ email });
 
   if (!user || !user.otp)
@@ -324,6 +546,22 @@ export const verifyOTPAndReset = async (req: Request, res: Response) => {
   user.otpAttempts = 0;
 
   await user.save();
+
+  await createAdminNotification({
+    title: "Password Reset",
+
+    message:
+      `${user.name} reset account password`,
+
+    category: "security",
+
+    severity: "warning",
+
+    metadata: {
+      userId: user._id,
+      email: user.email,
+    },
+  });
 
   await logSecurityEvent(user._id.toString(), req, "PASSWORD_RESET");
 
@@ -363,4 +601,29 @@ export const logout = async (
   res.json({
     success: true,
   });
+};
+
+
+export const refreshTokens = async (req: AuthRequest, res: Response) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return res.status(400).json({ message: "Missing refresh token" });
+    }
+
+    const decoded = verifyRefreshToken(refreshToken);
+    const { accessToken, refreshToken: newRefreshToken } = await rotateTokens(
+      req,
+      decoded.userId
+    );
+
+    return res.json({
+      success: true,
+      accessToken,
+      refreshToken: newRefreshToken,
+    });
+  } catch (error) {
+    console.error("REFRESH ERROR:", error);
+    return res.status(401).json({ message: "Invalid refresh token" });
+  }
 };

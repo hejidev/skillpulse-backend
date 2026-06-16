@@ -12,6 +12,10 @@ import { behaviorEngine } from "../lib/engine/behaviorEngine";
 import { adaptiveV5 } from "../lib/engine/adaptiveV5";
 import { runAchievementEngine } from "../lib/engine/runAchievementEngine";
 import { logActivity } from "../lib/activity";
+import { getUserPlanConfig } from "../lib/plan";
+import { startOfMonth } from "date-fns";
+
+import { checkReferralActivation } from "../services/referral-service";
 
 // ===============================
 // 🧠 STREAK HELPERS (FIXED)
@@ -87,20 +91,47 @@ export const addProgress = async (req: AuthRequest, res: Response) => {
 
     const userId = req.userId;
 
-    // =====================
-    // VALIDATE SKILL
-    // =====================
     const skill = await Skill.findOne({ _id: skillId, userId });
     if (!skill) {
       return res.status(404).json({ message: "Skill not found" });
     }
 
-    // =====================
-    // USER
-    // =====================
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
+    }
+
+    const plan = getUserPlanConfig(user);
+    const safeHours = Number(hours) || 0;
+
+    if (plan.monthlyHoursLimit !== null) {
+      const monthStart = startOfMonth(new Date());
+
+      const stats = await Progress.aggregate([
+        {
+          $match: {
+            userId,
+            createdAt: { $gte: monthStart },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalHours: { $sum: "$hours" },
+          },
+        },
+      ]);
+
+      const currentMonthHours = stats[0]?.totalHours || 0;
+      const projected = currentMonthHours + safeHours;
+
+      if (projected > plan.monthlyHoursLimit) {
+        return res.status(403).json({
+          message: `You have reached your monthly practice limit of ${plan.monthlyHoursLimit} hours on the ${plan.name} plan.`,
+          upgradeHint: true,
+          currentMonthHours,
+        });
+      }
     }
 
     // =====================
@@ -112,7 +143,6 @@ export const addProgress = async (req: AuthRequest, res: Response) => {
     // =====================
     // XP
     // =====================
-    const safeHours = Number(hours) || 0;
     const xp = safeHours * XP_PER_HOUR;
 
     // =====================
@@ -126,20 +156,11 @@ export const addProgress = async (req: AuthRequest, res: Response) => {
       note,
     });
 
-    // =====================
-    // UPDATE SKILL
-    // =====================
-    // =====================
-    // UPDATE SKILL (SMART SCALING 🚀)
-    // =====================
 
     // base updates
     skill.xp = (skill.xp || 0) + xp;
     skill.totalHours = (skill.totalHours || 0) + safeHours;
 
-    // =====================
-    // 🧠 SMART DIFFICULTY SYSTEM
-    // =====================
 
     // 1️⃣ LEVEL MULTIPLIER (difficulty scaling)
     const levelMultiplierMap: Record<string, number> = {
@@ -211,6 +232,15 @@ export const addProgress = async (req: AuthRequest, res: Response) => {
 
     await skill.save();
 
+    // 🔁 REFERRAL ACTIVATION HOOK (first progress)
+    try {
+      await checkReferralActivation(userId, "first_progress", {
+        hours: safeHours,
+      });
+    } catch (err) {
+      console.error("Referral activation (progress) error:", err);
+    }
+
     // =====================
     // BUILD SESSIONS (SAFE)
     // =====================
@@ -267,22 +297,22 @@ export const addProgress = async (req: AuthRequest, res: Response) => {
     }
 
     await logActivity({
-  userId: req.userId,
+      userId: req.userId,
 
-  type: "progress_added",
+      type: "progress_added",
 
-  title: "Progress Logged",
+      title: "Progress Logged",
 
-  description: `${hours} hours logged`,
+      description: `${hours} hours logged`,
 
-  severity: "info",
+      severity: "info",
 
-  metadata: {
-    skillId,
-    xp,
-    hours,
-  },
-});
+      metadata: {
+        skillId,
+        xp,
+        hours,
+      },
+    });
 
     // =====================
     // SOCKET

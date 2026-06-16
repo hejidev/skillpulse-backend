@@ -3,6 +3,7 @@ import User from "../models/User";
 import { ROLE_PERMISSIONS } from "../constants/roles";
 import SecurityLog from "../models/SecurityLog";
 import { logActivity } from "../lib/activity";
+import { createAdminNotification } from "../services/admin-notification.service";
 
 /* =========================================
    GET ALL USERS
@@ -72,6 +73,22 @@ export const updateUserRole = async (
 
     await user.save();
 
+    await createAdminNotification({
+      title: "Role Updated",
+
+      message:
+        `${user.name} role changed to ${role}`,
+
+      category: "admin",
+
+      severity: "warning",
+
+      metadata: {
+        userId: user._id,
+        role,
+      },
+    });
+
     res.json({
       success: true,
       message: "Role updated",
@@ -116,6 +133,21 @@ export const suspendUser = async (
         `${user?.name} was suspended`,
 
       severity: "danger",
+    });
+
+    await createAdminNotification({
+      title: "User Suspended",
+
+      message:
+        `${user?.name} was suspended`,
+
+      category: "user",
+
+      severity: "warning",
+
+      metadata: {
+        userId: user?._id,
+      },
     });
 
     res.json({
@@ -163,6 +195,21 @@ export const activateUser = async (
       severity: "success",
     });
 
+    await createAdminNotification({
+      title: "User Activated",
+
+      message:
+        `${user?.name} account restored`,
+
+      category: "user",
+
+      severity: "success",
+
+      metadata: {
+        userId: user?._id,
+      },
+    });
+
     res.json({
       success: true,
       user,
@@ -191,6 +238,22 @@ export const deleteUser = async (
         success: false,
       });
     }
+
+    await createAdminNotification({
+      title: "User Deleted",
+
+      message:
+        `${user.name} account was permanently removed`,
+
+      category: "user",
+
+      severity: "critical",
+
+      metadata: {
+        userId: user._id,
+        email: user.email,
+      },
+    });
 
     await User.findByIdAndDelete(userId);
 

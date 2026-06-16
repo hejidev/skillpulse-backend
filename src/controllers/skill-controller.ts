@@ -5,11 +5,43 @@ import { io } from "../server";
 import User from "../models/User";
 import { logActivity } from "../lib/activity";
 import { buildSkillPopularity } from "../lib/intelligence/skill-popularity-engine";
+import { getUserPlanConfig } from "../lib/plan";
+
+import { checkReferralActivation } from "../services/referral-service";
 
 // CREATE
 export const createSkill = async (req: AuthRequest, res: Response) => {
   try {
     const { name, level } = req.body;
+
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const plan = getUserPlanConfig(user);
+
+    // 1️⃣ SKILL COUNT LIMIT
+    const currentSkillCount = await Skill.countDocuments({ userId: req.userId });
+
+    if (plan.maxSkills !== null && currentSkillCount >= plan.maxSkills) {
+      return res.status(403).json({
+        message: `You have reached your limit of ${plan.maxSkills} skills on the ${plan.name} plan.`,
+        upgradeHint: true,
+      });
+    }
+
+    // 2️⃣ LEVEL LIMIT
+    const allowedLevelsOrder = ["Beginner", "Intermediate", "Advanced"] as const;
+    const requestedLevelIndex = allowedLevelsOrder.indexOf(level);
+    const maxLevelIndex = allowedLevelsOrder.indexOf(plan.maxLevel);
+
+    if (requestedLevelIndex > maxLevelIndex) {
+      return res.status(403).json({
+        message: `Your current plan (${plan.name}) only allows skills up to ${plan.maxLevel} level.`,
+        upgradeHint: true,
+      });
+    }
 
     const skill = await Skill.create({
       userId: req.userId,
@@ -18,20 +50,14 @@ export const createSkill = async (req: AuthRequest, res: Response) => {
     });
 
 
-// rebuild analytics
-const updatedSkills = await buildSkillPopularity();
+    // rebuild analytics
+    const updatedSkills = await buildSkillPopularity();
 
-// emit realtime update
-io.to("admin-dashboard").emit(
-  "intelligence:skills",
-  updatedSkills
-);
-
-    // ✅ GET USER
-    const user = await User.findById(req.userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    // emit realtime update
+    io.to("admin-dashboard").emit(
+      "intelligence:skills",
+      updatedSkills
+    );
 
     // ✅ CREATE NOTIFICATION OBJECT
     const notification = {
@@ -42,19 +68,26 @@ io.to("admin-dashboard").emit(
       createdAt: new Date(),
     };
 
-    await logActivity({
-  userId: req.userId,
-  type: "skill_created",
-  title: "New Skill Created",
-  description: `${user.name} created ${name}`,
-  severity: "success",
+    // 🔁 REFERRAL ACTIVATION HOOK (first skill)
+    try {
+      await checkReferralActivation(req.userId!, "first_skill");
+    } catch (err) {
+      console.error("Referral activation (skill) error:", err);
+    }
 
-  metadata: {
-    skillId: skill._id,
-    skill: skill.name,
-    level: skill.level,
-  },
-});
+    await logActivity({
+      userId: req.userId,
+      type: "skill_created",
+      title: "New Skill Created",
+      description: `${user.name} created ${name}`,
+      severity: "success",
+
+      metadata: {
+        skillId: skill._id,
+        skill: skill.name,
+        level: skill.level,
+      },
+    });
 
     // ✅ SAVE TO DB
     user.notifications.unshift(notification);

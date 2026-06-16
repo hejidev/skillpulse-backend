@@ -21,6 +21,13 @@ import {
 import { upload } from "../middleware/upload";
 import { logoutDevice } from "../controllers/auth-controller";
 
+import {
+  startTwoFactorSetup,
+  confirmTwoFactorSetup,
+  disableTwoFactor,
+  getTwoFactorStatus,
+} from "../controllers/twofactor-controller";
+
 const router = express.Router();
 
 router.get("/me", isAuth, getProfile);
@@ -40,5 +47,10 @@ router.put("/password", isAuth, changePassword);
 router.delete("/account", isAuth, deleteAccount);
 router.get("/security-logs", isAuth, getSecurityLogs);
 router.post("/logout-device", isAuth, logoutDevice);
+
+router.get("/2fa/status", isAuth, getTwoFactorStatus);
+router.post("/2fa/start", isAuth, startTwoFactorSetup);
+router.post("/2fa/confirm", isAuth, confirmTwoFactorSetup);
+router.post("/2fa/disable", isAuth, disableTwoFactor);
 
 export default router;

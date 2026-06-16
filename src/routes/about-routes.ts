@@ -1,33 +1,36 @@
 import express from "express";
 
 import {
-  getAbout,
-  getAdminAboutPage,
+  getPublicAbout,
+  getAdminAbout,
   updateAbout,
+  updateAboutStatus,
   deleteAbout,
+  getAboutAnalytics,
+  uploadAboutImage,
 } from "../controllers/about-controller";
+
 import { isAuth } from "../middleware/auth-middleware";
-import { requireRole } from "../middleware/role.middleware";
 
+import { requireRole }
+from "../middleware/role.middleware";
+import { upload } from "../middleware/upload";
 
+const router =
+  express.Router();
 
+/* =========================
+   PUBLIC
+========================= */
 
+router.get(
+  "/",
+  getPublicAbout
+);
 
-const router = express.Router();
-
-/*
-|--------------------------------------------------------------------------
-| PUBLIC
-|--------------------------------------------------------------------------
-*/
-
-router.get("/", getAbout);
-
-/*
-|--------------------------------------------------------------------------
-| ADMIN
-|--------------------------------------------------------------------------
-*/
+/* =========================
+   ADMIN
+========================= */
 
 router.get(
   "/admin",
@@ -36,7 +39,17 @@ router.get(
     "admin",
     "super_admin"
   ),
-  getAdminAboutPage
+  getAdminAbout
+);
+
+router.get(
+  "/admin/analytics",
+  isAuth,
+  requireRole(
+    "admin",
+    "super_admin"
+  ),
+  getAboutAnalytics
 );
 
 router.put(
@@ -49,16 +62,36 @@ router.put(
   updateAbout
 );
 
-/*
-|--------------------------------------------------------------------------
-| SUPER ADMIN
-|--------------------------------------------------------------------------
-*/
-
-router.delete(
-  "/admin",
+router.patch(
+  "/admin/status",
   isAuth,
-  requireRole("super_admin"),
+  requireRole(
+    "admin",
+    "super_admin"
+  ),
+  updateAboutStatus
+);
+
+
+/* ========== ADMIN IMAGE UPLOAD (Cloudinary) ========== */
+router.post(
+  "/admin/upload-image",
+  isAuth,
+  requireRole("admin", "super_admin"),
+  upload.single("image"), // field name: "image"
+  uploadAboutImage as unknown as express.RequestHandler
+);
+
+/* =========================
+   SUPER ADMIN
+========================= */
+router.delete(
+  "/admin/:id",
+  isAuth,
+  requireRole(
+    "admin",
+    "super_admin"
+  ),
   deleteAbout
 );
 

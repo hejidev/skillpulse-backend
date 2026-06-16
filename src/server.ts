@@ -13,6 +13,7 @@ import { Server } from "socket.io";
 
 import { collectSystemMetrics } from "./services/system-monitor";
 import { analyticsSocket } from "./socket/analytics-socket";
+import { syncPaystackPlans } from "./services/paystack-plan-service";
 // import { processThreatEvent } from "./services/system-alert.service";
 
 const PORT = process.env.PORT || 5000;
@@ -159,6 +160,25 @@ io.on("connection", (socket) => {
   }
 );
 
+socket.on(
+  "leave-about-admin",
+  () => {
+    socket.leave("about-admin");
+  }
+);
+
+/* =====================================
+     ADMIN NOTIFICATIONS
+===================================== */
+socket.on(
+  "join-admin-dashboard",
+  () => {
+    socket.join(
+      "admin-notifications"
+    );
+  }
+);
+
   /* =====================================
      TYPING EVENTS
   ===================================== */
@@ -195,6 +215,8 @@ io.on("connection", (socket) => {
         });
     }
   );
+
+
   
 
   /* =====================================
@@ -266,5 +288,9 @@ const startServer = async () => {
     console.log(error);
   }
 };
+
+syncPaystackPlans()
+  .then(() => console.log("Paystack plans synced"))
+  .catch((err) => console.error("Paystack plan sync error:", err));
 
 startServer();

@@ -15,6 +15,32 @@ const aboutSchema = new mongoose.Schema(
     heroBadge: String,
 
     heroImage: String,
+    heroImagePublicId: String,
+
+    /* =========================
+       FOUNDER
+    ========================= */
+    founderMessage: String,
+
+    founderName: String,
+
+    founderRole: String,
+
+    founderImage: String,
+     founderImagePublicId: String,
+
+    /* =========================
+       COMPANY INFO
+    ========================= */
+    companyFounded: String,
+
+    headquarters: String,
+
+    activeUsers: String,
+
+    countriesReached: String,
+
+    employees: String,
 
     /* =========================
        STORY
@@ -35,57 +61,72 @@ const aboutSchema = new mongoose.Schema(
     /* =========================
        COMPANY STATS
     ========================= */
-    stats: [
-      {
-        title: String,
-        value: String,
-        icon: String,
-      },
-    ],
+    stats: {
+      type: [
+        {
+          title: String,
+          value: String,
+          icon: String,
+        },
+      ],
+      default: [],
+    },
 
     /* =========================
        CORE VALUES
     ========================= */
-    values: [
-      {
-        title: String,
-        description: String,
-        icon: String,
-      },
-    ],
+    values: {
+  type: [
+    {
+      title: String,
+      description: String,
+      icon: String,
+    },
+  ],
+  default: [],
+},
 
     /* =========================
        TIMELINE
     ========================= */
-    timeline: [
+    timeline: {
+      type: [
       {
         year: String,
         title: String,
         description: String,
       },
     ],
+    default: [],
+  },
 
     /* =========================
        PLATFORM FEATURES
     ========================= */
-    features: [
-      {
-        title: String,
-        description: String,
-        icon: String,
-      },
-    ],
+    features: {
+      type: [
+        {
+          title: String,
+          description: String,
+          icon: String,
+        },
+      ],
+      default: [],
+    },
 
     /* =========================
        LEADERSHIP TEAM
     ========================= */
-    team: [
-      {
+    team: {
+      type: [
+        {
         name: String,
 
         role: String,
 
         image: String,
+
+        imagePublicId: String,
 
         bio: String,
 
@@ -96,11 +137,14 @@ const aboutSchema = new mongoose.Schema(
         github: String,
       },
     ],
+    default: [],
+  },
 
     /* =========================
        ROADMAP
     ========================= */
-    roadmap: [
+    roadmap: {
+    type: [
       {
         title: String,
 
@@ -115,21 +159,27 @@ const aboutSchema = new mongoose.Schema(
         },
       },
     ],
+    default: [],
+  },
 
     /* =========================
        TRUST SECTION
     ========================= */
-    trustedBy: [
+    trustedBy: {
+    type: [
       {
         company: String,
         logo: String,
       },
     ],
+    default: [],
+  },
 
     /* =========================
        TESTIMONIALS
     ========================= */
-    testimonials: [
+    testimonials: {
+    type: [
       {
         name: String,
 
@@ -137,10 +187,13 @@ const aboutSchema = new mongoose.Schema(
 
         image: String,
 
+        imagePublicId: String,
+
         quote: String,
       },
     ],
-
+    default: [],
+  },
     /* =========================
        CTA
     ========================= */
@@ -168,12 +221,125 @@ const aboutSchema = new mongoose.Schema(
     },
 
     /* =========================
+       PUBLISHED AT
+    ========================= */
+    publishedAt: Date,
+
+    /* =========================
+       ADMIN FIELDS
+    ========================= */
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+
+    /* =========================
+      ACHIEVEMENTS
+    ========================= */
+    achievements: {
+    type: [
+      {
+        title: String,
+        value: String,
+        description: String,
+      },
+    ],
+    default: [],
+  },
+
+    /* =========================
+      AWARDS    
+  ========================= */
+
+    awards: {
+      type: [
+        {
+        title: String,
+        issuer: String,
+        year: String,
+        image: String,
+        imagePublicId: String,
+      },
+    ],
+    default: [],
+  },
+
+    /* =========================
+      GLOBAL IMPACT
+    ========================= */
+    globalImpact: 
+    {
+      type: [
+      {
+        country: String,
+        users: String,
+      },
+    ],
+    default: [],
+  },
+
+    /* =========================
        STATUS
     ========================= */
-    published: {
-      type: Boolean,
-      default: true,
+    status: {
+      type: String,
+      enum: ["draft", "published"],
+      default: "draft",
     },
+
+    /* =========================
+       PARTNERS
+    ========================= */
+    partners: {
+    type: [
+      {
+        company: String,
+        logo: String,
+        logoPublicId: String,
+        website: String,
+      },
+    ],
+    default: [],
+  },
+
+    /* =========================
+      MEDIA MENTIONS
+    ========================= */
+    mediaMentions: 
+    {
+      type: [
+      {
+        source: String,
+        logo: String,
+        logoPublicId: String,
+        url: String,
+      },
+    ],
+    default: [],
+  },
+
+    /* =========================
+      COMPANY CULTURE
+    ========================= */
+    cultureTitle: String,
+
+    cultureDescription: String,
+
+    cultureImages: 
+    {
+      type: [String],
+      default: [],
+    },
+
+    /* =========================
+      CAREERS
+  ========================= */
+
+    careersTitle: String,
+
+    careersDescription: String,
+
+    careersLink: String,
   },
   {
     timestamps: true,
