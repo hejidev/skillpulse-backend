@@ -34,6 +34,8 @@ export const io = new Server(server, {
 /* =========================================
    SOCKET CONNECTION
 ========================================= */
+// export a map of userId -> socketId
+export const userSockets = new Map<string, string>();
 
 io.on("connection", (socket) => {
   console.log("SOCKET CONNECTED:", socket.id);
