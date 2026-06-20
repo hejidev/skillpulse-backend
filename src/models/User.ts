@@ -244,7 +244,11 @@ const userSchema = new Schema<IUser>({
 
   emailNotifications: { type: Boolean, default: true },
   pushNotifications: { type: Boolean, default: false },
-  theme: { type: String, default: "dark" },
+  theme: {
+    type: String,
+    enum: ["light", "dark", "system"],
+    default: "system",
+  },
 
   trustedDevices: [
     {

@@ -18,12 +18,15 @@ import { isAuth } from "../middleware/auth-middleware";
 import { requireRole } from "../middleware/role.middleware";
 import { getActivityDashboard, getActivityFeed } from "../controllers/activity-admin-controller";
 import { getAnalyticsHistory, getIntelligenceOverview } from "../controllers/intelligence-controller";
+import { getAdminDashboardStats } from "../controllers/adminDashboard.controller";
 
 const router = express.Router();
 
 /* =========================================
    USERS
 ========================================= */
+
+router.get("/dashboard", isAuth, requireRole("admin", "super_admin"), getAdminDashboardStats);
 
 router.get(
   "/users",

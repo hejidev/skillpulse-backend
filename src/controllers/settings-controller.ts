@@ -144,13 +144,17 @@ export const getReminder = async (req: AuthRequest, res: Response) => {
 
 // ================= THEME =================
 export const updateTheme = async (req: AuthRequest, res: Response) => {
-  const { theme } = req.body;
+  const { theme } = req.body as { theme: "light" | "dark" | "system" };
+
+  if (!["light", "dark", "system"].includes(theme)) {
+    return res.status(400).json({ message: "Invalid theme" });
+  }
 
   const user = await User.findByIdAndUpdate(
     req.userId,
     { theme },
     { new: true }
-  );
+  ).select("-password");
 
   res.json(user);
 };

@@ -32,6 +32,7 @@ import adminSettingsRoutes from "./routes/admin-settings-routes";
 import adminSubscribersRoutes from "./routes/admin-subscriber-routes";
 import adminNewsleterRoutes from "./routes/admin-newsletter-routes";
 import adminReferralRoutes from "./routes/admin-referral-routes";
+import adminSecurityRoutes from "./routes/admin-security";
 import newsleterRoutes from "./routes/newsletter-routes";
 import billingRoutes from "./routes/billing-routes";
 import referralRoutes from "./routes/referral-routes";
@@ -39,6 +40,8 @@ import paystackWebhookRoutes from "./routes/paystack-webhook-routes";
 
 import publicSettingsRoutes from "./routes/public-settings-routes";
 import { loadSystemSettings } from "./middleware/loadSystemSettings";
+import { ipBlocker } from "./middleware/ip-blocker";
+import userDeviceRoutes from "./routes/user-device-routes";
 
 
 
@@ -82,6 +85,8 @@ app.use(requestMonitor);
 
 app.use(socMonitor);
 
+app.use(ipBlocker);
+
 // 🚫 STRICT LOGIN LIMIT (ANTI-BRUTE FORCE)
 export const authLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
@@ -91,6 +96,7 @@ export const authLimiter = rateLimit({
 
 //LOAD SYSTEM
 app.use(loadSystemSettings);
+
 
 // ROUTES
 app.use("/api/auth", authRoutes);
@@ -116,6 +122,10 @@ app.use("/api/newsletter", newsleterRoutes);
 //admin referral routes
 app.use("/api/admin", adminReferralRoutes);
 
+//admin security log
+app.use("/api/admin/security", adminSecurityRoutes);
+
+
 // MAINTENANCE GATE
 app.use(maintenanceGate);
 
@@ -136,6 +146,7 @@ app.use("/uploads", express.static("uploads"));
 app.use("/api/system-alerts", systemAlertRoutes);
 app.use("/api/billing", billingRoutes);
 app.use("/api/referrals", referralRoutes);
+app.use("/api", userDeviceRoutes);
 app.use(paystackWebhookRoutes);
 // app.use("/api/webhooks", webhookRoutes);
 
