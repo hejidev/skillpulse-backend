@@ -1,6 +1,27 @@
 import AdminNotification from "../models/AdminNotification";
 import { io } from "../server";
 
+interface CreateAdminNotificationPayload {
+  title: string;
+  message: string;
+  category:
+    | "auth"
+    | "user"
+    | "security"
+    | "system"
+    | "ticket"
+    | "message"
+    | "analytics"
+    | "cms"
+    | "ai"
+    | "billing"
+    | "achievement"
+    | "leaderboard";
+  severity: "info" | "success" | "warning" | "critical";
+  metadata?: Record<string, any>;
+  roles?: Array<"admin" | "super_admin" | "support" | "user">;
+}
+
 export const createAdminNotification =
   async ({
     title,
@@ -24,11 +45,7 @@ export const createAdminNotification =
         targetRoles: roles,
       });
 
-    io.to("admin-notifications")
-      .emit(
-        "admin-notification",
-        notification
-      );
+    io.to("admin-notifications").emit("adminNotification", notification);
 
     return notification;
   };

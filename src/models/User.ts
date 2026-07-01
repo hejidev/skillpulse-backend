@@ -128,6 +128,9 @@ export interface IUser extends Document {
   twoFactorSecret?: string; // if using TOTP apps like Google Authenticator
   twoFactorBackupCodes?: string[]; // optional
   twoFactorTempSecret?: string;
+  profilePhoneMasked?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 const userSchema = new Schema<IUser>({
@@ -278,6 +281,7 @@ const userSchema = new Schema<IUser>({
   twoFactorSecret: { type: String }, // for TOTP
   twoFactorBackupCodes: [{ type: String }],
   twoFactorTempSecret: { type: [String], default: [] },
+  profilePhoneMasked: { type: String },
 },
   {
     timestamps: true,

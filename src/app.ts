@@ -33,6 +33,8 @@ import adminSubscribersRoutes from "./routes/admin-subscriber-routes";
 import adminNewsleterRoutes from "./routes/admin-newsletter-routes";
 import adminReferralRoutes from "./routes/admin-referral-routes";
 import adminSecurityRoutes from "./routes/admin-security";
+import adminApiKeysRoutes from "./routes/admin-api-keys.routes"; 
+import adminApiUsageRoutes from "./routes/admin-api-usage.routes"; 
 import newsleterRoutes from "./routes/newsletter-routes";
 import billingRoutes from "./routes/billing-routes";
 import referralRoutes from "./routes/referral-routes";
@@ -42,6 +44,10 @@ import publicSettingsRoutes from "./routes/public-settings-routes";
 import { loadSystemSettings } from "./middleware/loadSystemSettings";
 import { ipBlocker } from "./middleware/ip-blocker";
 import userDeviceRoutes from "./routes/user-device-routes";
+import userApiKeysRoutes from "./routes/user-api-keys.routes";
+import integrationRoutes from "./routes/integration-routes";
+import { apiKeyAuth } from "./middleware/api-key-auth";
+import { apiUsageLogger } from "./middleware/api-usage-log";
 
 
 
@@ -115,6 +121,7 @@ app.use("/api/admin", adminSubscribersRoutes);
 app.use("/api", publicSettingsRoutes);
 app.use("/api/blog", blogRoutes);
 app.use("/api/about", aboutRoutes);
+app.use("/api/billing", billingRoutes);
 
 // ✅ public newsletter routes – THIS is what the footer needs
 app.use("/api/newsletter", newsleterRoutes);
@@ -124,6 +131,12 @@ app.use("/api/admin", adminReferralRoutes);
 
 //admin security log
 app.use("/api/admin/security", adminSecurityRoutes);
+
+//admin api keys
+app.use("/api/admin", adminApiKeysRoutes);
+app.use("/api/admin", adminApiUsageRoutes);
+
+app.use("/api/integrations", apiKeyAuth, apiUsageLogger, integrationRoutes);
 
 
 // MAINTENANCE GATE
@@ -144,9 +157,11 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/coach", coachRoutes);
 app.use("/uploads", express.static("uploads"));
 app.use("/api/system-alerts", systemAlertRoutes);
-app.use("/api/billing", billingRoutes);
 app.use("/api/referrals", referralRoutes);
 app.use("/api", userDeviceRoutes);
+
+// user developer API keys
+app.use("/api/user", userApiKeysRoutes);
 app.use(paystackWebhookRoutes);
 // app.use("/api/webhooks", webhookRoutes);
 

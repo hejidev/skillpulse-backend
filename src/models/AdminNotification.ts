@@ -25,6 +25,9 @@ const adminNotificationSchema =
           "analytics",
           "cms",
           "ai",
+          "billing",
+          "achievement",
+          "leaderboard",
         ],
       },
 

@@ -125,38 +125,53 @@ export const register = async (req: Request, res: Response) => {
       process.env.SKIP_EMAIL_VERIFICATION === "true";
 
 
-     // 1) Create user
+    // 1) Create user
     const referralCode = await generateUniqueReferralCode();
+
+    // const user = await User.create({
+    //   name,
+    //   email,
+    //   password: hashed,
+    //   role: isAdmin ? "admin" : "user",
+    //   isVerified: isAdmin ? true : false,
+    //   emailToken: isAdmin ? token : undefined,
+    //   emailTokenExpires: 
+    //   isAdmin
+    //     ? undefined
+    //     : new Date(Date.now() + 1000 * 60 * 60),
+    //   referralCode,
+    // });
 
     const user = await User.create({
       name,
       email,
       password: hashed,
       role: isAdmin ? "admin" : "user",
-      isVerified: isAdmin ? true : false,
-      emailToken: isAdmin ? undefined : token,
-      emailTokenExpires: isAdmin
-        ? undefined
-        : new Date(Date.now() + 1000 * 60 * 60),
+      isVerified: isAdmin ? true : SKIP_EMAIL_VERIFICATION ? true : false,
+      emailToken: !isAdmin && !SKIP_EMAIL_VERIFICATION ? token : undefined,
+      emailTokenExpires:
+        !isAdmin && !SKIP_EMAIL_VERIFICATION
+          ? new Date(Date.now() + 1000 * 60 * 60)
+          : undefined,
       referralCode,
     });
 
-     // 2) If they signed up with a referral
-  if (ref) {
-    const referrer = await User.findOne({ referralCode: ref }).select("_id");
-    if (referrer) {
-      user.referredByCode = ref;
-      user.referredByUserId = referrer._id;
-      await user.save();
+    // 2) If they signed up with a referral
+    if (ref) {
+      const referrer = await User.findOne({ referralCode: ref }).select("_id");
+      if (referrer) {
+        user.referredByCode = ref;
+        user.referredByUserId = referrer._id;
+        await user.save();
 
-      await Referral.create({
-        code: ref,
-        referrerId: referrer._id,
-        referredUserId: user._id,
-        status: "signed_up",
-      });
+        await Referral.create({
+          code: ref,
+          referrerId: referrer._id,
+          referredUserId: user._id,
+          status: "signed_up",
+        });
+      }
     }
-  }
 
     // 🔥 ALWAYS SEND EMAIL IF NOT VERIFIED
     if (!isAdmin && !SKIP_EMAIL_VERIFICATION) {
@@ -285,39 +300,6 @@ export const login = async (req: AuthRequest, res: Response) => {
     const isTrusted = user.trustedDevices.some(
       (d: any) => d.deviceHash === deviceHash
     );
-
-    // // === 2FA enforcement + trusted devices lock ===
-    // let require2fa = false;
-
-    // if (settings?.enforce2FA) {
-    //   require2fa = true;
-
-    //   // If we lock by trusted devices and this device is trusted, skip 2FA
-    //   if (settings.trustedDevicesLock && isTrusted) {
-    //     require2fa = false;
-    //   }
-    // }
-
-    // if (require2fa && !user.twoFactorEnabled) {
-    //   return res.status(403).json({
-    //     require2faSetup: true,
-    //     message: "2FA is required. Please set it up to continue.",
-    //   });
-    // }
-
-    // if (require2fa && user.twoFactorEnabled) {
-    //   if (!twoFactorCode) {
-    //     return res.status(403).json({
-    //       require2faVerify: true,
-    //       message: "2FA verification required.",
-    //     });
-    //   }
-
-    //   const ok = await verifyTwoFactorCode(user, twoFactorCode);
-    //   if (!ok) {
-    //     return res.status(403).json({ message: "Invalid 2FA code." });
-    //   }
-    // }
 
     // Optional 2FA: only apply if user.twoFactorEnabled is true
     if (user.twoFactorEnabled) {

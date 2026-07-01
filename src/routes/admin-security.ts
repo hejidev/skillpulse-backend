@@ -1,74 +1,54 @@
-// routes/admin-security.ts
-import { Router } from "express";
+// routes/admin-security.routes.ts
+import express from "express";
 import { isAuth } from "../middleware/auth-middleware";
-import {
-  blockIpAdmin,
-  getSecurityLogsAdmin,
-  getThreatFeedAdmin,
-  listBlockedIpsAdmin,
-  listTrustedDevicesAdmin,
-  revokeTrustedDeviceAdmin,
-  trustDeviceAdmin,
-  unblockIpAdmin,
-} from "../controllers/adminSecurity.controller";
 import { requireRole } from "../middleware/role.middleware";
+import * as AdminSecurityController from "../controllers/adminSecurity.controller";
 
-const router = Router();
+const router = express.Router();
 
-router.get(
-  "/logs",
-  isAuth,
-  requireRole("admin", "super_admin"),
-  getSecurityLogsAdmin
-);
+// All routes require admin / super_admin
+router.use(isAuth, requireRole("admin", "super_admin"));
 
-router.get(
-  "/threat-feed",
-  isAuth,
-  requireRole("admin", "super_admin"),
-  getThreatFeedAdmin
-);
+// ========== Self sessions ==========
+router.get("/sessions", AdminSecurityController.getMySessions);
+router.post("/sessions/logout", AdminSecurityController.logoutMySession);
+router.post("/sessions/logout-all", AdminSecurityController.logoutMySessionsEverywhere);
 
+// ========== Global force logout ==========
+router.post("/force-logout-all", AdminSecurityController.forceLogoutAllUsers);
+
+// ========== MFA ==========
+router.get("/mfa-stats", AdminSecurityController.getMfaStats);
+router.get("/mfa-status", AdminSecurityController.getMyMfaStatus);
+
+// ========== Security logs & threat feed ==========
+router.get("/logs", AdminSecurityController.getSecurityLogsAdmin);
+router.get("/threat-feed", AdminSecurityController.getThreatFeedAdmin);
+
+// ========== Blocked IPs ==========
+router.post("/actions/block-ip", AdminSecurityController.blockIp);
+router.post("/actions/unblock-ip", AdminSecurityController.unblockIp);
+router.get("/blocked-ips", AdminSecurityController.listBlockedIpsAdmin);
+
+// ========== Trusted devices ==========
+router.post("/actions/trust-device", AdminSecurityController.trustDevice);
+router.post("/actions/revoke-device", AdminSecurityController.revokeDevice);
+router.get("/trusted-devices", AdminSecurityController.listTrustedDevicesAdmin);
+
+// ========== User isolation / lockdown ==========
+router.post("/actions/isolate-user", AdminSecurityController.isolateUser);
 router.post(
-  "/block-ip",
-  isAuth,
-  requireRole("admin", "super_admin"),
-  blockIpAdmin
+  "/actions/emergency-lockdown",
+  AdminSecurityController.emergencyLockdown
 );
 
-router.get(
-  "/blocked-ips",
-  isAuth,
-  requireRole("admin", "super_admin"),
-  listBlockedIpsAdmin
-);
+// ========== Admin audit trail ==========
+router.get("/actions", AdminSecurityController.listAdminSecurityActions);
 
-router.post(
-  "/unblock-ip",
-  isAuth,
-  requireRole("admin", "super_admin"),
-  unblockIpAdmin
-);
+// ========= Admin Login History ========
+router.get("/login-history", AdminSecurityController.getMyLoginHistory);
 
-router.post(
-  "/trust-device",
-  isAuth,
-  requireRole("admin", "super_admin"),
-  trustDeviceAdmin
-);
-
-router.get(
-  "/trusted-devices",
-  isAuth,
-  requireRole("admin", "super_admin"),
-  listTrustedDevicesAdmin
-);
-
-router.post(
-  "/revoke-device",
-  isAuth,
-  requireRole("admin", "super_admin"),
-  revokeTrustedDeviceAdmin
-);
+// ========= Admin Risk Review ==========
+router.get("/risk-overview", AdminSecurityController.getRiskOverview);
 
 export default router;

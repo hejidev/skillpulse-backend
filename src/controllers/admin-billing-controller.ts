@@ -8,6 +8,7 @@ import { isValidObjectId } from "mongoose";
 import BillingEvent from "../models/BillingEvent";
 import { notifyPlanChange } from "../services/email-service";
 import Plan, { IPlan } from "../models/Plan";
+import { createAdminNotification } from "../services/admin-notification.service";
 
 export const getAdminBillingOverview = async (req: AuthRequest, res: Response) => {
   try {
@@ -219,6 +220,15 @@ export const adminChangeUserPlan = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    await createAdminNotification({
+      title: "Plan changed",
+      message: `Admin changed plan for ${user.email} from ${oldPlan} to ${newPlan}.`,
+      category: "billing",
+      severity: "info",
+      roles: ["admin", "super_admin"],
+      metadata: { userId: user._id, oldPlan, newPlan, amountDeltaNGN },
+    });
+
     // Send email notifications
     try {
       await notifyPlanChange(user, oldPlan, newPlan, amountDeltaNGN);
@@ -299,6 +309,15 @@ export const adminCreateBillingEvent = async (req: AuthRequest, res: Response) =
         source: "admin",
         // optionally extend meta with note / adjustmentType
       },
+    });
+
+    await createAdminNotification({
+      title: "Billing adjustment",
+      message: `Manual billing adjustment of ₦${amountDeltaNGN} for ${user.email} on plan ${currentPlan}.`,
+      category: "billing",
+      severity: "info",
+      roles: ["admin", "super_admin"],
+      metadata: { userId: user._id, plan: currentPlan, amountDeltaNGN, reason, note },
     });
 
     return res.json({ success: true, event });

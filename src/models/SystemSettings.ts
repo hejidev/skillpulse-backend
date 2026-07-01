@@ -6,6 +6,7 @@ export interface ISystemSettings extends Document {
   apiBaseUrl: string;
 
   maintenanceMode: boolean;
+  lockdownScope: string;
   debugMode: boolean;
 
   enforce2FA: boolean;
@@ -35,6 +36,7 @@ const systemSettingsSchema = new Schema<ISystemSettings>(
     apiBaseUrl: { type: String, default: "" },
 
     maintenanceMode: { type: Boolean, default: false },
+    lockdownScope: { type: String },
     debugMode: { type: Boolean, default: false },
 
     enforce2FA: { type: Boolean, default: false },

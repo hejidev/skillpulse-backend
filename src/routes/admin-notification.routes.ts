@@ -9,6 +9,8 @@ import {
   deleteNotification,
   getNotificationStats,
   archiveMany,
+  deleteMany,
+  deleteByFilter,
 } from "../controllers/admin-notification.controller";
 import { isAuth } from "../middleware/auth-middleware";
 import { requireRole } from "../middleware/role.middleware";
@@ -65,6 +67,14 @@ router.patch(
   "/archive-many",
   isAuth,
   archiveMany
+);
+
+router.post("/delete-many", isAuth, deleteMany);
+
+router.post(
+  "/delete-by-filter",
+  isAuth,
+  deleteByFilter
 );
 
 export default router;
