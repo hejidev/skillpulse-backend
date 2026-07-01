@@ -11,8 +11,13 @@ export const getPlans = async (req: Request, res: Response) => {
   try {
     const dbPlans: IPlan[] = await Plan.find({ active: true }).lean();
 
-    // optional: still use PLANS for non-price limits
-    const result = dbPlans.map((p) => {
+    const planOrder: PlanId[] = ["free", "starter", "pro", "enterprise"];
+
+    const sortedDbPlans = dbPlans.sort(
+      (a, b) => planOrder.indexOf(a.planId) - planOrder.indexOf(b.planId)
+    );
+
+    const result = sortedDbPlans.map((p) => {
       const cfg = PLANS[p.planId]; // for maxSkills, etc.
       return {
         id: p.planId,
